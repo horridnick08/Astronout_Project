@@ -71,7 +71,7 @@ function createStaticNormalizedProp(sourceNode, targetHeight, centerVertically =
  * - Station 3: Cargo Alcove (Far Left Floor): Metallic Barrels resting flat at [-2.2, 0, -2.2]
  * - Station 4: Reactor Dock (Far Right Wall Socket): Glowing Quantum Core at [2.2, 0.75, -2.2]
  */
-export default function PropsManager() {
+export default function PropsManager({ usp1Active = false, usp2Active = false }) {
   const { scene } = useGLTF(PACK_PATH);
   const [isCoreAttached, setIsCoreAttached] = useState(interactionEngine.isCoreAttached);
 
@@ -254,6 +254,25 @@ export default function PropsManager() {
         <pointLight position={[0, 0.82, 0]} color="#00f0ff" intensity={0.6} distance={1.8} decay={2} />
       </group>
 
+      {/* USP 1 & 2 VISUALIZERS at Station 1 */}
+      <group position={[-1.6, 0.81, -0.4]}>
+        {/* USP 1: Payload-Rack Kinematics Reference Frame */}
+        {usp1Active && (
+          <group>
+            <axesHelper args={[1.5]} />
+            <gridHelper args={[2, 10, '#10b981', '#047857']} rotation={[Math.PI / 2, 0, 0]} />
+          </group>
+        )}
+
+        {/* USP 2: Volumetric Workspace Anchor */}
+        {usp2Active && (
+          <mesh>
+            <octahedronGeometry args={[1.5, 1]} />
+            <meshBasicMaterial color="#f59e0b" wireframe transparent opacity={0.4} />
+          </mesh>
+        )}
+      </group>
+
       {propsObjects.laptop && (
         <group
           position={[-1.6, 0.81, -0.4]}
@@ -301,6 +320,7 @@ export default function PropsManager() {
       {/* - Glowing Quantum Core mounted inside wall dock at [2.2, 0.75, -2.2] */}
       {/* ============================================================== */}
       <group position={[2.2, 0.75, -2.2]}>
+
         {/* Wall socket dock ring geometry */}
         <mesh position={[0.08, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.26, 0.28, 0.08, 24]} />

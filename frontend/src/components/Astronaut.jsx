@@ -102,7 +102,7 @@ export default function Astronaut({
   // Calibration: fits the 3.0m spaceship corridor
   const calibration = useMemo(() => ({
     scale: 0.165,
-    baseY: 0.0
+    baseY: 0.15 // Raised to ensure feet float above the ground box
   }), []);
 
   // Rig bone discovery and rest pose capture
@@ -162,29 +162,16 @@ export default function Astronaut({
     const time = state.clock.getElapsedTime();
     const bs = blendStateRef.current;
 
-    // A. Check InteractionEngine waypoint navigation update
+    // A. Read Locomotion & InteractionEngine state from props
     let activePos = locomotion.position;
     let activeRotY = locomotion.rotationY;
+    currentRotationYRef.current = activeRotY;
 
-    const navResult = interactionEngine.update(
-      delta,
-      locomotion.position,
-      currentRotationYRef.current,
-      (poseType) => {
-        bs.activePoseType = poseType;
-        bs.interactionPoseBlend = THREE.MathUtils.lerp(bs.interactionPoseBlend, 1.0, Math.min(1.0, delta * 5.0));
-      }
-    );
-
-    if (navResult) {
-      activePos = navResult.position;
-      activeRotY = navResult.rotationY;
-      currentRotationYRef.current = activeRotY;
+    if (engineState.isInteracting && engineState.targetWaypoint) {
+      bs.activePoseType = engineState.targetWaypoint.poseType;
+      bs.interactionPoseBlend = THREE.MathUtils.lerp(bs.interactionPoseBlend, 1.0, Math.min(1.0, delta * 5.0));
     } else {
-      currentRotationYRef.current = activeRotY;
-      if (!engineState.isInteracting) {
-        bs.interactionPoseBlend = THREE.MathUtils.lerp(bs.interactionPoseBlend, 0.0, Math.min(1.0, delta * 6.0));
-      }
+      bs.interactionPoseBlend = THREE.MathUtils.lerp(bs.interactionPoseBlend, 0.0, Math.min(1.0, delta * 6.0));
     }
 
     // B. Mocap Blending Transition

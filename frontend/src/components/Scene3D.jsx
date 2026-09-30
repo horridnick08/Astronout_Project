@@ -29,7 +29,19 @@ export default function Scene3D({
   isLiveMocap = false,
   lerpFactor = 0.22,
   zeroGIntensity = 1.0,
-  onBonesDiscovered = null
+  onBonesDiscovered = null,
+  usp1Active = false,
+  usp2Active = false,
+  usp4Active = false,
+  usp5Active = false,
+  usp6Active = false,
+  usp7Active = false,
+  usp8Active = false,
+  usp9Active = false,
+  usp10Active = false,
+  usp11Active = false,
+  usp12Active = false,
+  usp19Active = false
 }) {
   return (
     <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, overflow: 'hidden', background: '#020617' }}>
@@ -64,32 +76,76 @@ export default function Scene3D({
         {/* - Ambient Light: intensity = 1.4 (pure white)                  */}
         {/* - Directional Light: [2, 7, 3], intensity = 1.3                */}
         {/* ============================================================== */}
-        <ambientLight intensity={1.4} color="#ffffff" />
-        <directionalLight
-          position={[2, 7, 3]}
-          intensity={1.3}
-          color="#ffffff"
-          castShadow
-          shadow-mapSize-width={2048}
-          shadow-mapSize-height={2048}
-          shadow-bias={-0.0001}
-        />
+        {usp11Active ? (
+          <>
+            <ambientLight intensity={0.5} color="#ff0000" />
+            <directionalLight position={[2, 7, 3]} intensity={1.5} color="#ff0000" castShadow />
+            <pointLight position={[0, 2, 0]} color="#ff0000" intensity={2} distance={10} decay={2} />
+          </>
+        ) : usp12Active ? (
+          <>
+            {/* USP 12: EXTREME SOLAR GLARE SIMULATION */}
+            <ambientLight intensity={3.5} color="#fffbeb" />
+            <directionalLight position={[10, 5, 10]} intensity={8.0} color="#fef3c7" castShadow />
+            <pointLight position={[0, 2, 0]} color="#fbbf24" intensity={4} distance={20} decay={1.5} />
+          </>
+        ) : usp19Active ? (
+          <>
+            {/* USP 19: THERMAL-ROBUST OVERHEAT SIMULATION */}
+            <ambientLight intensity={0.6} color="#450a0a" />
+            <directionalLight position={[2, 7, 3]} intensity={2.0} color="#dc2626" castShadow />
+            <pointLight position={[0, 2, 0]} color="#ef4444" intensity={5} distance={15} decay={2} />
+          </>
+        ) : (
+          <>
+            <ambientLight intensity={1.4} color="#ffffff" />
+            <directionalLight
+              position={[2, 7, 3]}
+              intensity={1.3}
+              color="#ffffff"
+              castShadow
+              shadow-mapSize-width={2048}
+              shadow-mapSize-height={2048}
+              shadow-bias={-0.0001}
+            />
+          </>
+        )}
 
         {/* Subtle Sci-Fi Accent Lights for Corridor Depth */}
         <pointLight
           position={[-2.5, 2.2, -1.0]}
-          color="#06b6d4"
-          intensity={1.5}
+          color={usp11Active ? "#ff0000" : usp12Active ? "#fff" : usp19Active ? "#dc2626" : "#06b6d4"}
+          intensity={usp12Active ? 0.1 : 1.5}
           distance={8}
           decay={2}
         />
         <pointLight
           position={[2.5, 2.2, -1.0]}
-          color="#f59e0b"
-          intensity={1.2}
+          color={usp11Active ? "#ff0000" : usp12Active ? "#fff" : "#f59e0b"}
+          intensity={usp12Active ? 0.1 : 1.2}
           distance={8}
           decay={2}
         />
+
+        {/* ============================================================== */}
+        {/* GROUP B: PERCEPTION ENGINE 3D VISUAL EFFECTS                   */}
+        {/* ============================================================== */}
+
+        {/* USP 8: Contradiction Guard (Red Blockade on Laptop) */}
+        {usp8Active && (
+          <mesh position={[-1.6, 0.9, -0.4]}>
+            <boxGeometry args={[0.6, 0.4, 0.6]} />
+            <meshBasicMaterial color="#ef4444" wireframe transparent opacity={0.6} />
+          </mesh>
+        )}
+
+        {/* USP 9: Physical Spatial Memory (Teal Ghost Box on Barrels - ignores depth) */}
+        {usp9Active && (
+          <mesh position={[-2.2, 0.4, -2.2]}>
+            <boxGeometry args={[0.8, 0.8, 0.8]} />
+            <meshBasicMaterial color="#14b8a6" wireframe transparent opacity={0.8} depthTest={false} />
+          </mesh>
+        )}
 
         {/* Deep Space Background Atmosphere */}
         <Stars
@@ -120,7 +176,7 @@ export default function Scene3D({
         {/* ============================================================== */}
         <Suspense fallback={null}>
           <SpaceshipCorridor />
-          <PropsManager />
+          <PropsManager usp1Active={usp1Active} usp2Active={usp2Active} />
           <Astronaut
             locomotion={locomotion}
             landmarks={landmarks}
