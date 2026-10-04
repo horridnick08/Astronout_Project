@@ -85,7 +85,7 @@ export default function WebcamFeed({
   }, [landmarks, isLive, canvasRef]);
 
   return (
-    <div className="relative rounded-xl overflow-hidden border border-cyan-500/30 bg-slate-900/80 backdrop-blur-md shadow-2xl shadow-cyan-950/40 w-64 h-48 flex flex-col">
+    <div className="relative rounded-xl overflow-hidden border border-cyan-500/30 bg-slate-900/80 backdrop-blur-md shadow-2xl shadow-cyan-950/40 w-full h-48 flex flex-col">
       {/* Video Header Bar */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-950/60 border-b border-cyan-500/20 text-xs font-mono">
         <div className="flex items-center gap-1.5">
