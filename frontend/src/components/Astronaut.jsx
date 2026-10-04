@@ -11,7 +11,7 @@ import {
   computeRootTranslation,
   resetBaselineHip
 } from '../engine/MocapEngine.js';
-import { interactionEngine, INTERACTION_ACTIONS } from '../engine/InteractionEngine.js';
+import { automatedMissionLoop } from '../engine/AutomatedMissionLoop.js';
 
 const PACK_PATH = '/models/astronaut/space_sci_fi_pack.glb';
 
@@ -19,12 +19,11 @@ const PACK_PATH = '/models/astronaut/space_sci_fi_pack.glb';
  * Astronaut
  * 
  * Production-ready Rigged Astronaut Character:
- * - Decoupled from all prop sub-meshes (Props live in PropsManager in the world scene)
- * - Retains ONLY the rigged suit mesh and skeleton bones
+ * - Executes automated 30-40s mission loop across 12 distinct steps
+ * - Procedural bone kinematics for floating, window observation, laptop & console typing,
+ *   barrel inspection, grabbing/placing quantum core, and communicating with Edge AI
+ * - Retains isolated SkinnedMesh and skeleton bindings (Props live in independent world modules)
  * - Calibrated scale (0.165) for 3.0m spaceship corridor
- * - ONLY Astronaut gets locomotion & micro zero-g float: position.y = baseY + Math.sin(time * 1.0) * 0.03
- * - Supports procedural walk cycle, waypoint navigation poses, and Live MediaPipe Mocap
- * - Renders harvested Quantum Core attached to gauntlet when grabbed
  */
 export default function Astronaut({
   locomotion = {
@@ -45,52 +44,50 @@ export default function Astronaut({
   const targetPosRef = useRef(new THREE.Vector3(0, 0, 0));
   const currentRotationYRef = useRef(0);
 
-  // Interaction engine state
-  const [engineState, setEngineState] = useState(interactionEngine.getState());
+  // Automated mission loop state
+  const [missionState, setMissionState] = useState(automatedMissionLoop.getState());
 
   useEffect(() => {
-    return interactionEngine.subscribe((state) => {
-      setEngineState(state);
+    return automatedMissionLoop.subscribe((state) => {
+      setMissionState(state);
     });
   }, []);
 
   // 1. ISOLATE RIGGED ASTRONAUT SUIT & SKELETON
-  // Uses SkeletonUtils.clone to properly clone SkinnedMesh skeleton bindings,
-  // then strips out all prop meshes completely so props NEVER move with the astronaut.
   const isolatedAstronautScene = useMemo(() => {
     if (!scene) return null;
 
     const cloned = skeletonClone(scene);
+    const propNamesToRemove = [
+      'Cube', 'Cube001',
+      'computer_1', 'computer_2',
+      'barrel_1', 'barrel_2', 'barrel_3_1', 'barrel_3_2',
+      'energy_sphere', 'Camera', 'Light'
+    ];
 
-    // Identify and remove all prop sub-meshes from the astronaut hierarchy
-    const propsToRemove = [];
-    cloned.traverse((child) => {
-      const n = (child.name || '').toLowerCase();
-      if (
-        n.includes('computer') ||
-        n.includes('barrel') ||
-        n.includes('cube') ||
-        n.includes('energy_sphere') ||
-        n.includes('prop')
-      ) {
-        propsToRemove.push(child);
+    const nodesToRemove = [];
+    cloned.traverse((node) => {
+      if (propNamesToRemove.includes(node.name) || propNamesToRemove.some(p => node.name.startsWith(p))) {
+        nodesToRemove.push(node);
       }
     });
 
-    propsToRemove.forEach((p) => {
-      if (p.parent) p.parent.remove(p);
+    nodesToRemove.forEach((node) => {
+      if (node.parent) {
+        node.parent.remove(node);
+      }
     });
 
-    // Configure PBR materials and shadow flags on the astronaut suit
     cloned.traverse((child) => {
-      if (child.isMesh) {
+      if (child.isMesh || child.isSkinnedMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
+        child.frustumCulled = false;
 
         if (child.material) {
           child.material = child.material.clone();
-          child.material.roughness = Math.min(child.material.roughness ?? 0.4, 0.4);
-          child.material.metalness = Math.max(child.material.metalness ?? 0.35, 0.45);
+          child.material.roughness = Math.max(child.material.roughness || 0.35, 0.28);
+          child.material.metalness = Math.min(child.material.metalness || 0.65, 0.85);
           child.material.needsUpdate = true;
         }
       }
@@ -99,13 +96,11 @@ export default function Astronaut({
     return cloned;
   }, [scene]);
 
-  // Calibration: fits the 3.0m spaceship corridor
   const calibration = useMemo(() => ({
     scale: 0.165,
-    baseY: 0.0
+    baseY: 0.05
   }), []);
 
-  // Rig bone discovery and rest pose capture
   const bones = useMemo(() => {
     if (!isolatedAstronautScene) return {};
     return discoverBones(isolatedAstronautScene);
@@ -122,7 +117,6 @@ export default function Astronaut({
     return captureRestPose(bones, isolatedAstronautScene);
   }, [bones, isolatedAstronautScene]);
 
-  // Capture initial rest Euler rotations for safe relative procedural offsets
   const restEuler = useMemo(() => {
     if (!isolatedAstronautScene || !bones) return {};
     const res = {};
@@ -138,165 +132,226 @@ export default function Astronaut({
     return res;
   }, [bones, isolatedAstronautScene]);
 
-  // Reset baseline hip on mocap toggle
   useEffect(() => {
     if (isLiveMocap) {
       resetBaselineHip();
     }
   }, [isLiveMocap]);
 
-  // Quaternion & Euler caching for smooth root rotation slerp
   const targetQuat = useMemo(() => new THREE.Quaternion(), []);
   const targetEuler = useMemo(() => new THREE.Euler(0, 0, 0, 'YXZ'), []);
 
-  // State machine blending state
   const blendStateRef = useRef({
-    mocapBlend: 0.0,
-    interactionPoseBlend: 0.0,
-    activePoseType: null
+    mocapBlend: 0.0
   });
 
-  // Main frame loop: locomotion via root group translation & quaternion slerp, continuous zero-g bone float, waypoint kinematics
+  // Main animation frame loop
   useFrame((state, delta) => {
     if (!rootGroupRef.current) return;
     const time = state.clock.getElapsedTime();
     const bs = blendStateRef.current;
 
-    // A. Check InteractionEngine waypoint navigation update
-    let activePos = locomotion.position;
-    let activeRotY = locomotion.rotationY;
+    // Active position and rotation from locomotion / mission loop
+    const activePos = locomotion.position;
+    currentRotationYRef.current = locomotion.rotationY;
 
-    const navResult = interactionEngine.update(
-      delta,
-      locomotion.position,
-      currentRotationYRef.current,
-      (poseType) => {
-        bs.activePoseType = poseType;
-        bs.interactionPoseBlend = THREE.MathUtils.lerp(bs.interactionPoseBlend, 1.0, Math.min(1.0, delta * 5.0));
-      }
-    );
-
-    if (navResult) {
-      activePos = navResult.position;
-      activeRotY = navResult.rotationY;
-      currentRotationYRef.current = activeRotY;
-    } else {
-      currentRotationYRef.current = activeRotY;
-      if (!engineState.isInteracting) {
-        bs.interactionPoseBlend = THREE.MathUtils.lerp(bs.interactionPoseBlend, 0.0, Math.min(1.0, delta * 6.0));
-      }
-    }
-
-    // B. Mocap Blending Transition
+    // Mocap blending transition
     const targetMocapBlend = isLiveMocap ? 1.0 : 0.0;
     bs.mocapBlend = THREE.MathUtils.lerp(bs.mocapBlend, targetMocapBlend, Math.min(1.0, delta * 6.0));
 
-    // C. Micro Zero-G Vertical Float:
-    // position.y = baseY + Math.sin(time * 1.0) * 0.03
+    // Micro Zero-G vertical float: position.y = baseY + Math.sin(time * 1.0) * 0.03
     const microZeroGFloat = Math.sin(time * 1.0) * 0.03 * zeroGIntensity;
 
-    // D. UNIFIED CONTINUOUS PROCEDURAL ZERO-G IDLE BONE ANIMATIONS
-    // Runs ALL THE TIME (both stationary AND when traveling to waypoints).
-    // NO walking animation, leg gait, or arm-flaring poses during movement.
+    // PROCEDURAL BONE KINEMATICS FOR 12-STEP MISSION LOOP
     if (!isLiveMocap) {
       const head = bones.head;
       const spine = bones.spine || bones.chest;
       const leftArm = bones.leftUpperArm;
       const rightArm = bones.rightUpperArm;
+      const leftLowerArm = bones.leftLowerArm;
+      const rightLowerArm = bones.rightLowerArm;
       const leftHand = bones.leftHand;
       const rightHand = bones.rightHand;
       const leftLeg = bones.leftThigh;
       const rightLeg = bones.rightThigh;
 
-      // 1. Head & Neck: gentle helmet looking around
-      if (head) {
-        head.rotation.y = Math.sin(time * 0.8) * 0.06;
-        head.rotation.x = Math.cos(time * 0.6) * 0.04;
-      }
-
-      // 2. Spine & Chest (Breathing Float):
+      // Base weightless zero-g breathing & palm float
       if (spine) {
         const baseSpineX = restEuler.spine ? restEuler.spine.x : 0;
-        spine.rotation.x = baseSpineX + Math.sin(time * 1.0) * 0.03;
-      }
-
-      // 3. Hands, Arms & Palms: floating zero-g posture & soft palm movement
-      if (leftArm) {
-        leftArm.rotation.z = -0.2 + Math.sin(time * 1.1) * 0.05;
-      }
-      if (rightArm) {
-        rightArm.rotation.z = 0.2 - Math.sin(time * 1.1) * 0.05;
+        spine.rotation.x = baseSpineX + Math.sin(time * 1.0) * 0.02;
       }
       if (leftHand) {
         const baseHandX = restEuler.leftHand ? restEuler.leftHand.x : 0;
-        leftHand.rotation.x = baseHandX + Math.sin(time * 1.4) * 0.08;
+        leftHand.rotation.x = baseHandX + Math.sin(time * 1.4) * 0.06;
       }
       if (rightHand) {
         const baseHandX = restEuler.rightHand ? restEuler.rightHand.x : 0;
-        rightHand.rotation.x = baseHandX + Math.cos(time * 1.4) * 0.08;
+        rightHand.rotation.x = baseHandX + Math.cos(time * 1.4) * 0.06;
       }
 
-      // 4. Subtle Leg Drift (STRICTLY CLAMPED - NO SPLITS):
-      // Apply very slight, gentle drift on upper legs (max range ±0.03 rad) so legs feel weightless in zero-g without flaring outwards
+      // Subtle leg drift (weightless, strictly clamped)
       if (leftLeg) {
         const baseLeftLegZ = restEuler.leftThigh ? restEuler.leftThigh.z : 0;
-        const driftL = Math.sin(time * 0.7) * 0.02;
-        leftLeg.rotation.z = baseLeftLegZ + Math.max(-0.03, Math.min(0.03, 0.01 + driftL));
+        leftLeg.rotation.z = baseLeftLegZ + Math.sin(time * 0.7) * 0.015;
       }
       if (rightLeg) {
         const baseRightLegZ = restEuler.rightThigh ? restEuler.rightThigh.z : 0;
-        const driftR = Math.sin(time * 0.7) * 0.02;
-        rightLeg.rotation.z = baseRightLegZ - Math.max(-0.03, Math.min(0.03, 0.01 + driftR));
+        rightLeg.rotation.z = baseRightLegZ - Math.sin(time * 0.7) * 0.015;
+      }
+
+      // Task-specific kinematics based on active loop step poseType:
+      const pose = automatedMissionLoop.currentStep?.poseType || missionState.poseType || 'FLOAT_BACKWARDS';
+
+      if (pose === 'FLOAT_BACKWARDS') {
+        // Step 1: Arms float gently outwards, body leans back slightly
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, -0.05, delta * 3.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, Math.sin(time * 0.6) * 0.05, delta * 3.0);
+        }
+        if (leftArm) leftArm.rotation.z = THREE.MathUtils.lerp(leftArm.rotation.z, -0.28, delta * 3.0);
+        if (rightArm) rightArm.rotation.z = THREE.MathUtils.lerp(rightArm.rotation.z, 0.28, delta * 3.0);
+        if (leftArm) leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, 0.1, delta * 3.0);
+        if (rightArm) rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, 0.1, delta * 3.0);
+      } else if (pose === 'LOOK_OUT_WINDOW_1' || pose === 'LOOK_WINDOW_BRIEF') {
+        // Step 2 & 8: Head tilts up and right/left to observe cosmos outside window
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, 0.18, delta * 4.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, -0.25, delta * 4.0);
+        }
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.4, delta * 3.0);
+          rightArm.rotation.z = THREE.MathUtils.lerp(rightArm.rotation.z, 0.2, delta * 3.0);
+        }
+        if (leftArm) {
+          leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, -0.15, delta * 3.0);
+        }
+      } else if (pose === 'LOOK_OUT_WINDOW_2') {
+        // Step 3: Deep space observation window gazing
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, 0.12, delta * 4.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, -0.3 + Math.sin(time * 0.8) * 0.08, delta * 3.0);
+        }
+        if (rightArm) rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.2, delta * 3.0);
+        if (leftArm) leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, -0.2, delta * 3.0);
+      } else if (pose === 'TYPE_LAPTOP') {
+        // Step 4: Extends arms forward, typing motion on Tactical Laptop
+        const typeOscR = Math.sin(time * 9.0) * 0.04;
+        const typeOscL = Math.cos(time * 8.5) * 0.03;
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, -0.22, delta * 4.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, 0.0, delta * 4.0);
+        }
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.75 + typeOscR, delta * 5.0);
+          rightArm.rotation.z = THREE.MathUtils.lerp(rightArm.rotation.z, -0.2, delta * 5.0);
+        }
+        if (rightLowerArm) rightLowerArm.rotation.x = THREE.MathUtils.lerp(rightLowerArm.rotation.x, -0.65, delta * 5.0);
+        if (leftArm) {
+          leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, -0.68 + typeOscL, delta * 5.0);
+          leftArm.rotation.z = THREE.MathUtils.lerp(leftArm.rotation.z, 0.2, delta * 5.0);
+        }
+        if (leftLowerArm) leftLowerArm.rotation.x = THREE.MathUtils.lerp(leftLowerArm.rotation.x, -0.60, delta * 5.0);
+      } else if (pose === 'TYPE_CONSOLE') {
+        // Step 5: Operates holographic comms console with dual gauntlets
+        const dialOsc = Math.sin(time * 5.0) * 0.05;
+        const slideOsc = Math.cos(time * 4.5) * 0.04;
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, -0.15, delta * 4.0);
+        }
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.82 + dialOsc, delta * 5.0);
+          rightArm.rotation.y = THREE.MathUtils.lerp(rightArm.rotation.y, 0.2, delta * 5.0);
+        }
+        if (rightLowerArm) rightLowerArm.rotation.x = THREE.MathUtils.lerp(rightLowerArm.rotation.x, -0.45, delta * 5.0);
+        if (leftArm) {
+          leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, -0.72 + slideOsc, delta * 5.0);
+          leftArm.rotation.y = THREE.MathUtils.lerp(leftArm.rotation.y, -0.18, delta * 5.0);
+        }
+        if (leftLowerArm) leftLowerArm.rotation.x = THREE.MathUtils.lerp(leftLowerArm.rotation.x, -0.45, delta * 5.0);
+      } else if (pose === 'LOOK_AHEAD') {
+        // Step 6: Turns and looks straight down the aisle
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, 0.0, delta * 3.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, Math.sin(time * 0.5) * 0.1, delta * 3.0);
+        }
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.1, delta * 3.0);
+          rightArm.rotation.y = THREE.MathUtils.lerp(rightArm.rotation.y, 0.0, delta * 3.0);
+          rightArm.rotation.z = THREE.MathUtils.lerp(rightArm.rotation.z, 0.2, delta * 3.0);
+        }
+        if (leftArm) {
+          leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, -0.1, delta * 3.0);
+          leftArm.rotation.y = THREE.MathUtils.lerp(leftArm.rotation.y, 0.0, delta * 3.0);
+          leftArm.rotation.z = THREE.MathUtils.lerp(leftArm.rotation.z, -0.2, delta * 3.0);
+        }
+      } else if (pose === 'INSPECT_BARRELS') {
+        // Step 7: Head tilted down inspecting cargo barrels, gesturing
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, -0.32, delta * 4.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, -0.22, delta * 4.0);
+        }
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.45, delta * 4.0);
+          rightArm.rotation.y = THREE.MathUtils.lerp(rightArm.rotation.y, -0.2, delta * 4.0);
+        }
+        if (rightLowerArm) rightLowerArm.rotation.x = THREE.MathUtils.lerp(rightLowerArm.rotation.x, -0.35, delta * 4.0);
+      } else if (pose === 'GRAB_CORE') {
+        // Step 9: Reaches right hand out to grab Quantum Core from reactor socket
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, -0.1, delta * 4.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, 0.25, delta * 4.0);
+        }
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.95, delta * 6.0);
+          rightArm.rotation.y = THREE.MathUtils.lerp(rightArm.rotation.y, 0.35, delta * 6.0);
+        }
+        if (rightLowerArm) rightLowerArm.rotation.x = THREE.MathUtils.lerp(rightLowerArm.rotation.x, -0.35, delta * 6.0);
+      } else if (pose === 'PLACE_CORE_BACK') {
+        // Step 10: Extends right arm, locks core into socket, then lowers arm
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, -0.05, delta * 4.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, 0.2, delta * 4.0);
+        }
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.88, delta * 5.0);
+          rightArm.rotation.y = THREE.MathUtils.lerp(rightArm.rotation.y, 0.3, delta * 5.0);
+        }
+        if (rightLowerArm) rightLowerArm.rotation.x = THREE.MathUtils.lerp(rightLowerArm.rotation.x, -0.3, delta * 5.0);
+      } else if (pose === 'PROMPT_AI') {
+        // Step 11: Faces forward, left hand raised slightly near helmet comms radio
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, 0.05, delta * 4.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, 0.0, delta * 4.0);
+        }
+        if (leftArm) {
+          leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, -0.75, delta * 5.0);
+          leftArm.rotation.z = THREE.MathUtils.lerp(leftArm.rotation.z, 0.35, delta * 5.0);
+        }
+        if (leftLowerArm) leftLowerArm.rotation.x = THREE.MathUtils.lerp(leftLowerArm.rotation.x, -0.85, delta * 5.0);
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.15, delta * 4.0);
+          rightArm.rotation.y = THREE.MathUtils.lerp(rightArm.rotation.y, 0.0, delta * 4.0);
+          rightArm.rotation.z = THREE.MathUtils.lerp(rightArm.rotation.z, 0.22, delta * 4.0);
+        }
+      } else if (pose === 'AI_RESPONSE') {
+        // Step 12: Relaxed weightless float, subtle head nod receiving Edge AI transmission
+        if (head) {
+          head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, 0.04 + Math.sin(time * 1.5) * 0.03, delta * 3.0);
+          head.rotation.y = THREE.MathUtils.lerp(head.rotation.y, 0.0, delta * 3.0);
+        }
+        if (leftArm) {
+          leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.rotation.x, -0.15, delta * 3.0);
+          leftArm.rotation.z = THREE.MathUtils.lerp(leftArm.rotation.z, -0.22, delta * 3.0);
+        }
+        if (leftLowerArm) leftLowerArm.rotation.x = THREE.MathUtils.lerp(leftLowerArm.rotation.x, 0.0, delta * 3.0);
+        if (rightArm) {
+          rightArm.rotation.x = THREE.MathUtils.lerp(rightArm.rotation.x, -0.15, delta * 3.0);
+          rightArm.rotation.z = THREE.MathUtils.lerp(rightArm.rotation.z, 0.22, delta * 3.0);
+        }
       }
     }
 
-    // E. Procedural Waypoint Interaction Kinematics (overlays only when stationary at station)
-    if (bs.interactionPoseBlend > 0.01 && !isLiveMocap && bs.activePoseType) {
-      const pBlend = bs.interactionPoseBlend;
-
-      if (bs.activePoseType === 'TYPE_PRIMARY') {
-        // Station 1: Extends right gauntlet to type on Tactical Laptop
-        if (bones.rightUpperArm && restPose.rightUpperArm) {
-          const typingOsc = Math.sin(time * 9.0) * 0.04;
-          bones.rightUpperArm.rotation.x = THREE.MathUtils.lerp(bones.rightUpperArm.rotation.x, -0.75 + typingOsc, pBlend * 0.15);
-          bones.rightUpperArm.rotation.z = THREE.MathUtils.lerp(bones.rightUpperArm.rotation.z, -0.25, pBlend * 0.15);
-        }
-        if (bones.rightLowerArm && restPose.rightLowerArm) {
-          bones.rightLowerArm.rotation.x = THREE.MathUtils.lerp(bones.rightLowerArm.rotation.x, -0.65, pBlend * 0.15);
-        }
-        if (bones.head && restPose.head) {
-          bones.head.rotation.x = THREE.MathUtils.lerp(bones.head.rotation.x, -0.22, pBlend * 0.1);
-        }
-      } else if (bs.activePoseType === 'OPERATE_TELEMETRY') {
-        // Station 2: Operates Holographic Telemetry Console with dual gauntlets
-        if (bones.rightUpperArm && restPose.rightUpperArm) {
-          const dialOsc = Math.sin(time * 5.0) * 0.06;
-          bones.rightUpperArm.rotation.x = THREE.MathUtils.lerp(bones.rightUpperArm.rotation.x, -0.8 + dialOsc, pBlend * 0.15);
-          bones.rightUpperArm.rotation.y = THREE.MathUtils.lerp(bones.rightUpperArm.rotation.y, 0.2, pBlend * 0.15);
-        }
-        if (bones.leftUpperArm && restPose.leftUpperArm) {
-          const slideOsc = Math.cos(time * 4.5) * 0.05;
-          bones.leftUpperArm.rotation.x = THREE.MathUtils.lerp(bones.leftUpperArm.rotation.x, -0.7 + slideOsc, pBlend * 0.15);
-          bones.leftUpperArm.rotation.y = THREE.MathUtils.lerp(bones.leftUpperArm.rotation.y, -0.2, pBlend * 0.15);
-        }
-      } else if (bs.activePoseType === 'INSPECT_COSMOS') {
-        // Deep Space Observation Window: Calm posture looking out at cosmos
-        if (bones.head && restPose.head) {
-          bones.head.rotation.x = THREE.MathUtils.lerp(bones.head.rotation.x, 0.25, pBlend * 0.1);
-        }
-      } else if (bs.activePoseType === 'GRAB_CORE') {
-        // Station 4: Reaches right hand toward wall dock to grab Quantum Core
-        if (bones.rightUpperArm && restPose.rightUpperArm) {
-          bones.rightUpperArm.rotation.x = THREE.MathUtils.lerp(bones.rightUpperArm.rotation.x, -0.95, pBlend * 0.18);
-          bones.rightUpperArm.rotation.y = THREE.MathUtils.lerp(bones.rightUpperArm.rotation.y, 0.35, pBlend * 0.18);
-        }
-        if (bones.rightLowerArm && restPose.rightLowerArm) {
-          bones.rightLowerArm.rotation.x = THREE.MathUtils.lerp(bones.rightLowerArm.rotation.x, -0.35, pBlend * 0.18);
-        }
-      }
-    }
-
-    // F. Live MediaPipe Mocap Kinematics (Quaternions + Slerp)
+    // Live MediaPipe Mocap Kinematics (Quaternions + Slerp)
     if (bs.mocapBlend > 0.01) {
       applyKinematics({
         bones,
@@ -307,12 +362,11 @@ export default function Astronaut({
       });
     }
 
-    // Blend back to rest pose when exiting mocap and idle
     if (!isLiveMocap && bs.mocapBlend > 0.01) {
       blendToRestPose(bones, restPose, 0.1);
     }
 
-    // G. Root Group Locomotion & Smooth Quaternion Orientation ONLY
+    // Root Group Locomotion & Smooth Quaternion Orientation
     const rootOffset = (isLiveMocap && landmarks && landmarks.length >= 25)
       ? computeRootTranslation(landmarks)
       : null;
@@ -326,11 +380,11 @@ export default function Astronaut({
 
     targetPosRef.current.set(targetX, targetY, targetZ);
 
-    // Smooth root group translation (lerp)
+    // Smooth root group translation
     const posLerpSpeed = isLiveMocap ? Math.min(1.0, lerpFactor * 1.5) : Math.min(1.0, delta * 6.0);
     rootGroupRef.current.position.lerp(targetPosRef.current, posLerpSpeed);
 
-    // Smooth root group orientation toward travel direction via Quaternion slerp (do NOT rotate individual hip/spine bones)
+    // Smooth root group orientation toward heading via Quaternion slerp
     targetEuler.set(0, currentRotationYRef.current, 0);
     targetQuat.setFromEuler(targetEuler);
     rootGroupRef.current.quaternion.slerp(targetQuat, Math.min(1.0, delta * 6.0));
@@ -350,19 +404,19 @@ export default function Astronaut({
         position={[0, 0, 0]}
       />
 
-      {/* When Quantum Core is grabbed, attach miniature glowing Core to right gauntlet */}
-      {engineState.isCoreAttached && bones.rightHand && (
+      {/* When Quantum Core is grabbed, attach glowing miniature Core to right gauntlet */}
+      {missionState.isCoreAttached && bones.rightHand && (
         <group position={[0.45, 1.05, 0.35]}>
           <mesh>
             <sphereGeometry args={[0.08, 16, 16]} />
             <meshStandardMaterial
               color="#38bdf8"
               emissive="#00e5ff"
-              emissiveIntensity={3.0}
+              emissiveIntensity={3.2}
               toneMapped={false}
             />
           </mesh>
-          <pointLight color="#00e5ff" intensity={1.8} distance={1.2} decay={2} />
+          <pointLight color="#00e5ff" intensity={2.0} distance={1.5} decay={2} />
         </group>
       )}
     </group>

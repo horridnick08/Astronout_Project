@@ -3,7 +3,9 @@ import { Canvas } from '@react-three/fiber';
 import { Stars, Sparkles, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import SpaceshipCorridor from './3d/SpaceshipCorridor.jsx';
-import PropsManager from './PropsManager.jsx';
+import StorageBarrels from './3d/StorageBarrels.jsx';
+import QuantumCore from './3d/QuantumCore.jsx';
+import Workstations from './3d/Workstations.jsx';
 import Astronaut from './Astronaut.jsx';
 import CameraManager, { CAMERA_VIEWS } from '../engine/CameraManager.jsx';
 
@@ -13,8 +15,11 @@ import CameraManager, { CAMERA_VIEWS } from '../engine/CameraManager.jsx';
  * Principal 3D WebGL Canvas Architecture:
  * 1. Clean Near-Plane: camera near = 0.01 (prevents helmet/visor clipping)
  * 2. Illumination: Pure White Ambient Light (intensity = 1.4), Directional Light [2, 7, 3] (intensity = 1.3)
- * 3. Decoupled Props Architecture: PropsManager rendered as independent world entities
- * 4. Isolated Astronaut Character: SkinnedMesh + bones only, micro zero-g float, waypoint kinematics
+ * 3. Separately Loaded 3D Assets:
+ *    - StorageBarrels: Cargo storage barrels loaded separately at distinct coordinates
+ *    - QuantumCore: Glowing core secured at designated reactor wall slot [2.2, 0.75, -2.2]
+ *    - Workstations: Flight Ops laptop desk and Comms mainframe console
+ * 4. Isolated Astronaut Character: Automated 30-40s mission loop kinematics
  * 5. Static Corridor Environment: Static background room shell
  */
 export default function Scene3D({
@@ -37,7 +42,7 @@ export default function Scene3D({
         camera={{
           position: [0, 1.25, 2.2],
           fov: 50,
-          near: 0.01, // Prevent helmet/visor geometry from clipping into camera
+          near: 0.01,
           far: 500
         }}
         gl={{
@@ -53,14 +58,13 @@ export default function Scene3D({
         <CameraManager
           activeView={activeCameraView}
           astronautPos={locomotion.position}
-          astronautHeading={locomotion.rotationY}
         />
 
         {/* PBR Environment Reflections for Metallic Spacesuit & Visor */}
         <Environment preset="city" environmentIntensity={0.65} />
 
         {/* ============================================================== */}
-        {/* ILLUMINATION: Requirement 5                                    */}
+        {/* ILLUMINATION                                                    */}
         {/* - Ambient Light: intensity = 1.4 (pure white)                  */}
         {/* - Directional Light: [2, 7, 3], intensity = 1.3                */}
         {/* ============================================================== */}
@@ -113,14 +117,18 @@ export default function Scene3D({
         />
 
         {/* ============================================================== */}
-        {/* DECOUPLED 3D ENTITIES: Requirement 1                           */}
-        {/* - SpaceshipCorridor: Static background room shell               */}
-        {/* - PropsManager: Decoupled world props (Station 1, 2, 3, 4)     */}
-        {/* - Astronaut: Isolated character entity (Locomotion & Micro 0-G) */}
+        {/* SEPARATELY LOADED 3D ASSETS & CHARACTERS                       */}
+        {/* - SpaceshipCorridor: Background room shell                     */}
+        {/* - StorageBarrels: Cargo barrels at distinct wall coordinates   */}
+        {/* - QuantumCore: Secured at reactor socket [2.2, 0.75, -2.2]     */}
+        {/* - Workstations: Flight Ops and Comms console stations          */}
+        {/* - Astronaut: Automated 30-40s mission loop kinematics          */}
         {/* ============================================================== */}
         <Suspense fallback={null}>
           <SpaceshipCorridor />
-          <PropsManager />
+          <StorageBarrels />
+          <QuantumCore />
+          <Workstations />
           <Astronaut
             locomotion={locomotion}
             landmarks={landmarks}
