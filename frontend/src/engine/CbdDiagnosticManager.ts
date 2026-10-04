@@ -13,7 +13,7 @@
 
 import { StationEventBus } from './StationEventBus.ts';
 
-export type DiagnosticScanType = 'NONE' | 'CAMERA_PIPELINE' | 'EDGE_AI_MODULES';
+export type DiagnosticScanType = 'NONE' | 'GLARE_ADAPTATION' | 'CAMERA_PIPELINE' | 'EDGE_AI_MODULES';
 export type DiagnosticStatus = 'IDLE' | 'SCANNING' | 'COMPLETED';
 
 export interface DiagnosticTargetNode {
@@ -28,12 +28,17 @@ export interface DiagnosticTargetNode {
 export interface CbdDiagnosticState {
   status: DiagnosticStatus;
   scanType: DiagnosticScanType;
-  step: number; // 0 = idle, 1 = CAM_01, 2 = CAM_02 fault, 3 = CAM_02 bypass/repair, 4 = CAM_03 & CAM_04 secure
+  step: number; // 0 = idle, 1 to 4 = active phase step
   phaseLabel: string;
   progress: number; // 0 to 1
   laserSweepY: number; // Vertical laser plane coordinate
   targets: DiagnosticTargetNode[];
   faultsRecovered: number;
+  isGlareActive: boolean;
+  glareNodeId: string;
+  spectralAdapted: boolean;
+  errorRatePct: number;
+  warningBadge: string | null;
 }
 
 class CbdDiagnosticManagerClass {
@@ -44,47 +49,57 @@ class CbdDiagnosticManagerClass {
   private progress: number = 0;
   private laserSweepY: number = 1.5;
   private faultsRecovered: number = 0;
+  private isGlareActive: boolean = false;
+  private glareNodeId: string = 'cam_02';
+  private spectralAdapted: boolean = false;
+  private errorRatePct: number = 4.2;
+  private warningBadge: string | null = null;
+
   private animationFrameId: number | null = null;
   private startTime: number = 0;
-  // Reduced speed by ~60% -> smooth, realistic 7.2s sci-fi diagnostic sweep
+  // Smooth, realistic 5.6s sci-fi diagnostic sweep
   private readonly scanDurationMs: number = 5600;
   private listeners: Set<(state: CbdDiagnosticState) => void> = new Set();
 
+  private getDefaultTargets(): DiagnosticTargetNode[] {
+    return [
+      {
+        id: 'cam_01',
+        name: 'Stereo Vision Head 01',
+        position: [-1.4, 1.8, -1.2],
+        status: 'PENDING',
+        label: '[CAM_01: ONLINE]',
+        color: '#00ff99',
+      },
+      {
+        id: 'cam_02',
+        name: 'Stereo Vision Head 02',
+        position: [1.4, 1.7, -3.2],
+        status: 'PENDING',
+        label: '[CAM_02: ONLINE]',
+        color: '#00ff99',
+      },
+      {
+        id: 'cam_03',
+        name: 'Corridor Node Head 03',
+        position: [-1.5, 1.7, -5.8],
+        status: 'PENDING',
+        label: '[CAM_03: ONLINE]',
+        color: '#00ff99',
+      },
+      {
+        id: 'cam_04',
+        name: 'Overhead Bulkhead Head 04',
+        position: [1.3, 1.9, -7.5],
+        status: 'PENDING',
+        label: '[CAM_04: ONLINE]',
+        color: '#00ff99',
+      },
+    ];
+  }
+
   // 4 Active Multi-Camera Nodes across the 3D space station
-  private targets: DiagnosticTargetNode[] = [
-    {
-      id: 'cam_01',
-      name: 'Stereo Vision Head 01',
-      position: [-1.4, 1.8, -1.2],
-      status: 'PENDING',
-      label: '[CAM_01: ONLINE]',
-      color: '#00ff99',
-    },
-    {
-      id: 'cam_02',
-      name: 'Stereo Vision Head 02',
-      position: [1.4, 1.7, -3.2],
-      status: 'PENDING',
-      label: '[CAM_02: FAULT DETECTED]',
-      color: '#ffaa00',
-    },
-    {
-      id: 'cam_03',
-      name: 'Corridor Node Head 03',
-      position: [-1.5, 1.7, -5.8],
-      status: 'PENDING',
-      label: '[CAM_03: ONLINE]',
-      color: '#00ff99',
-    },
-    {
-      id: 'cam_04',
-      name: 'Overhead Bulkhead Head 04',
-      position: [1.3, 1.9, -7.5],
-      status: 'PENDING',
-      label: '[CAM_04: ONLINE]',
-      color: '#00ff99',
-    },
-  ];
+  private targets: DiagnosticTargetNode[] = this.getDefaultTargets();
 
   public getState(): CbdDiagnosticState {
     return {
@@ -96,6 +111,11 @@ class CbdDiagnosticManagerClass {
       laserSweepY: this.laserSweepY,
       targets: this.targets,
       faultsRecovered: this.faultsRecovered,
+      isGlareActive: this.isGlareActive,
+      glareNodeId: this.glareNodeId,
+      spectralAdapted: this.spectralAdapted,
+      errorRatePct: this.errorRatePct,
+      warningBadge: this.warningBadge,
     };
   }
 
@@ -118,6 +138,33 @@ class CbdDiagnosticManagerClass {
     });
   }
 
+  /**
+   * MODULE 1 Action: Simulate Glare Spike on CAM_02 & Trigger Spectral Adaptation
+   */
+  public triggerGlareEvent(nodeId: string = 'cam_02'): void {
+    if (this.status === 'SCANNING') return;
+
+    this.isGlareActive = true;
+    this.spectralAdapted = false;
+    this.errorRatePct = 38.6;
+    this.glareNodeId = nodeId;
+    this.warningBadge = '[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]';
+
+    // Isolate CAM_02 visually with amber warning state
+    this.targets = this.getDefaultTargets();
+    this.targets[1].status = 'FAULT';
+    this.targets[1].label = '[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]';
+    this.targets[1].color = '#ffaa00';
+
+    this.phaseLabel = 'ALERT: GLARE SPIKE ON CAM_02 // INITIATING SPECTRAL ADAPTATION...';
+    this.notify();
+
+    // Automatically trigger Module 1 Spectral Adaptation sweep
+    setTimeout(() => {
+      this.startScan('GLARE_ADAPTATION');
+    }, 400);
+  }
+
   public startScan(type: DiagnosticScanType): void {
     if (this.status === 'SCANNING') return;
 
@@ -127,47 +174,32 @@ class CbdDiagnosticManagerClass {
     this.step = 1;
     this.startTime = performance.now();
 
-    if (type === 'EDGE_AI_MODULES') {
-      this.phaseLabel = 'STEP 1/4: NPU THREAD ALLOCATION // VERIFY CORES';
-    } else {
-      this.phaseLabel = 'STEP 1/4: TARGET CAM_01 // STEREO HEAD 01 ONLINE';
-    }
+    // Initialize targets clean
+    this.targets = this.getDefaultTargets();
 
-    // Initialize targets
-    this.targets = [
-      {
-        id: 'cam_01',
-        name: 'Stereo Vision Head 01',
-        position: [-1.4, 1.8, -1.2],
-        status: 'NOMINAL',
-        label: '[CAM_01: ONLINE]',
-        color: '#00ff99',
-      },
-      {
-        id: 'cam_02',
-        name: 'Stereo Vision Head 02',
-        position: [1.4, 1.7, -3.2],
-        status: 'PENDING',
-        label: '[CAM_02: FAULT DETECTED]',
-        color: '#ffaa00',
-      },
-      {
-        id: 'cam_03',
-        name: 'Corridor Node Head 03',
-        position: [-1.5, 1.7, -5.8],
-        status: 'PENDING',
-        label: '[CAM_03: ONLINE]',
-        color: '#00ff99',
-      },
-      {
-        id: 'cam_04',
-        name: 'Overhead Bulkhead Head 04',
-        position: [1.3, 1.9, -7.5],
-        status: 'PENDING',
-        label: '[CAM_04: ONLINE]',
-        color: '#00ff99',
-      },
-    ];
+    if (type === 'GLARE_ADAPTATION') {
+      // ─── MODULE 1: SPECTRAL GLARE ADAPTATION ───
+      this.phaseLabel = 'STEP 1/4: GLARE SPIKE SIMULATION // CAM_02 SENSOR SATURATION';
+      this.isGlareActive = true;
+      this.spectralAdapted = false;
+      this.warningBadge = '[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]';
+      this.targets[1].status = 'FAULT';
+      this.targets[1].label = '[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]';
+      this.targets[1].color = '#ffaa00';
+    } else if (type === 'CAMERA_PIPELINE') {
+      // ─── MODULE 2: CAMERA PIPELINE CONSISTENCY CHECK ───
+      this.phaseLabel = 'STEP 1/4: VERIFY CAM_01 // STEREO HEAD 01 ONLINE';
+      this.isGlareActive = false;
+      this.warningBadge = null;
+      this.targets[0].status = 'NOMINAL';
+      this.targets[0].label = '[CAM_01: ONLINE]';
+      this.targets[0].color = '#00ff99';
+    } else if (type === 'EDGE_AI_MODULES') {
+      // ─── MODULE 3: AI CORE & NEURAL MODULE SWEEP ───
+      this.phaseLabel = 'STEP 1/4: NPU THREAD ALLOCATION // VERIFY CORES';
+      this.isGlareActive = false;
+      this.warningBadge = null;
+    }
 
     this.notify();
     this.runScanLoop();
@@ -182,8 +214,85 @@ class CbdDiagnosticManagerClass {
     // Smooth, realistic laser sweep (~60% slower wave velocity)
     this.laserSweepY = 1.4 + Math.sin(norm * Math.PI * 2.0) * 1.3;
 
-    if (this.scanType === 'EDGE_AI_MODULES') {
-      // ─── MODULE 2: AI CORE SWEEP ────────────────────────────────
+    if (this.scanType === 'GLARE_ADAPTATION') {
+      // ─── MODULE 1: SPECTRAL GLARE & AMBIENT ADAPTATION ─────────
+      if (norm < 0.25) {
+        this.step = 1;
+        this.phaseLabel = 'STEP 1/4: GLARE SPIKE SIMULATION // CAM_02 SENSOR SATURATION';
+        this.isGlareActive = true;
+        this.spectralAdapted = false;
+        this.warningBadge = '[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]';
+        this.targets[1].status = 'FAULT';
+        this.targets[1].label = '[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]';
+        this.targets[1].color = '#ffaa00';
+        this.errorRatePct = 34.2;
+      } else if (norm < 0.50) {
+        this.step = 2;
+        this.phaseLabel = 'STEP 2/4: SENSOR OVEREXPOSURE DETECTED // OPTICAL BLOOM';
+        this.isGlareActive = true;
+        this.spectralAdapted = false;
+        this.warningBadge = '[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]';
+        this.targets[1].status = 'FAULT';
+        this.targets[1].label = '[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]';
+        this.targets[1].color = '#ffaa00';
+        this.errorRatePct = 38.6;
+      } else if (norm < 0.75) {
+        this.step = 3;
+        this.phaseLabel = 'STEP 3/4: ADAPTIVE SPECTRAL FILTER // TEMPERATURE SCALING';
+        this.isGlareActive = false;
+        this.spectralAdapted = true;
+        this.warningBadge = '[CAM_02: SPECTRAL ADAPTED & REPAIRED]';
+        this.targets[1].status = 'BYPASSED';
+        this.targets[1].label = '[CAM_02: SPECTRAL ADAPTED & REPAIRED]';
+        this.targets[1].color = '#00f0ff';
+        this.errorRatePct = 4.4;
+      } else if (norm < 1.0) {
+        this.step = 4;
+        this.phaseLabel = 'STEP 4/4: SPECTRAL MOMENT COMPENSATED // ERROR < 4.8%';
+        this.isGlareActive = false;
+        this.spectralAdapted = true;
+        this.warningBadge = '[CAM_02: SPECTRAL ADAPTED & REPAIRED]';
+        this.targets[1].status = 'BYPASSED';
+        this.targets[1].label = '[CAM_02: SPECTRAL ADAPTED & REPAIRED]';
+        this.targets[1].color = '#00f0ff';
+        this.errorRatePct = 4.1;
+      } else {
+        this.completeScan();
+        return;
+      }
+    } else if (this.scanType === 'CAMERA_PIPELINE') {
+      // ─── MODULE 2: CAMERA PIPELINE CONSISTENCY CHECK ───────────
+      // Sequentially targets CAM_01 -> CAM_02 -> CAM_03 -> CAM_04
+      if (norm < 0.25) {
+        this.step = 1;
+        this.phaseLabel = 'STEP 1/4: VERIFY CAM_01 // STEREO HEAD 01 ONLINE';
+        this.targets[0].status = 'NOMINAL';
+        this.targets[0].label = '[CAM_01: ONLINE]';
+        this.targets[0].color = '#00ff99';
+      } else if (norm < 0.50) {
+        this.step = 2;
+        this.phaseLabel = 'STEP 2/4: VERIFY CAM_02 // STEREO HEAD 02 ONLINE';
+        this.targets[1].status = 'NOMINAL';
+        this.targets[1].label = '[CAM_02: ONLINE]';
+        this.targets[1].color = '#00ff99';
+      } else if (norm < 0.75) {
+        this.step = 3;
+        this.phaseLabel = 'STEP 3/4: VERIFY CAM_03 // CORRIDOR NODE 03 ONLINE';
+        this.targets[2].status = 'NOMINAL';
+        this.targets[2].label = '[CAM_03: ONLINE]';
+        this.targets[2].color = '#00ff99';
+      } else if (norm < 1.0) {
+        this.step = 4;
+        this.phaseLabel = 'STEP 4/4: VERIFY CAM_04 // BULKHEAD HEAD 04 ONLINE';
+        this.targets[3].status = 'NOMINAL';
+        this.targets[3].label = '[ALL 4 STREAMS NOMINAL]';
+        this.targets[3].color = '#00ff99';
+      } else {
+        this.completeScan();
+        return;
+      }
+    } else if (this.scanType === 'EDGE_AI_MODULES') {
+      // ─── MODULE 3: AI CORE & NEURAL MODULE SWEEP ───────────────
       if (norm < 0.25) {
         this.step = 1;
         this.phaseLabel = 'STEP 1/4: NPU THREAD ALLOCATION // VERIFY CORES';
@@ -196,41 +305,6 @@ class CbdDiagnosticManagerClass {
       } else if (norm < 1.0) {
         this.step = 4;
         this.phaseLabel = "STEP 4/4: REITER'S SYSTEM HYPOTHESIS // AI CORE OPTIMAL";
-      } else {
-        this.completeScan();
-        return;
-      }
-    } else {
-      // ─── MODULE 1: CAMERA PIPELINE CHECK ────────────────────────
-      if (norm < 0.25) {
-        // Step 1: Target CAM_01
-        this.step = 1;
-        this.phaseLabel = 'STEP 1/4: TARGET CAM_01 // STEREO HEAD 01 ONLINE';
-        this.targets[0].status = 'NOMINAL';
-        this.targets[0].label = '[CAM_01: ONLINE]';
-        this.targets[0].color = '#00ff99';
-        this.targets[1].status = 'PENDING';
-      } else if (norm < 0.50) {
-        // Step 2: Target CAM_02 -> Latent Fault Anomaly Detected
-        this.step = 2;
-        this.phaseLabel = 'STEP 2/4: TARGET CAM_02 // FAULT DETECTED';
-        this.targets[1].status = 'FAULT';
-        this.targets[1].label = '[CAM_02: FAULT DETECTED]';
-        this.targets[1].color = '#ffaa00';
-      } else if (norm < 0.75) {
-        // Step 3: Trigger Reiter's Bypass & Isolation
-        this.step = 3;
-        this.phaseLabel = "STEP 3/4: REITER'S BYPASS // CAM_02 REPAIRED";
-        this.targets[1].status = 'BYPASSED';
-        this.targets[1].label = '[CAM_02: REPAIRED]';
-        this.targets[1].color = '#00f0ff';
-      } else if (norm < 1.0) {
-        // Step 4: Verify CAM_03 & CAM_04 -> All Streams Nominal
-        this.step = 4;
-        this.phaseLabel = 'STEP 4/4: VERIFY NODES // ALL STREAMS NOMINAL';
-        this.targets[2].status = 'NOMINAL';
-        this.targets[2].label = '[ALL STREAMS NOMINAL]';
-        this.targets[2].color = '#00ff99';
       } else {
         this.completeScan();
         return;
@@ -251,37 +325,52 @@ class CbdDiagnosticManagerClass {
     this.progress = 1;
     this.step = 4;
 
-    if (this.scanType === 'EDGE_AI_MODULES') {
-      this.phaseLabel = 'AI CORE SWEEP COMPLETE // ALL MODULES OPTIMAL';
-      this.faultsRecovered = 0;
-
-      // Broadcast log event into Edge AI chat stream for Module 2
-      StationEventBus.emit('cbdDiagnosticComplete', {
-        scanType: 'EDGE_AI_MODULES',
-        topLine: ">_ [REITER'S CBD // AI CORE SWEEP COMPLETE]",
-        subText: '   Neural Vision Pipeline & Local LLM Verified (Latency: 8ms, Confidence: 98.2%)',
-        confidencePct: 98.2,
-        bayesK: 34.2,
-      });
-    } else {
-      this.phaseLabel = 'DIAGNOSTIC COMPLETE // ALL 4 PIPELINES SECURE';
+    if (this.scanType === 'GLARE_ADAPTATION') {
+      this.phaseLabel = 'GLARE COMPENSATION COMPLETE // CAM_02 ADAPTED';
       this.faultsRecovered = 1;
+      this.isGlareActive = false;
+      this.spectralAdapted = true;
+      this.warningBadge = '[CAM_02: SPECTRAL ADAPTED & REPAIRED]';
+      this.errorRatePct = 4.1;
 
-      // Lock statuses for heads
-      this.targets[0].status = 'NOMINAL';
-      this.targets[0].label = '[CAM_01: ONLINE]';
       this.targets[1].status = 'BYPASSED';
-      this.targets[1].label = '[CAM_02: REPAIRED]';
-      this.targets[2].status = 'NOMINAL';
-      this.targets[2].label = '[ALL STREAMS NOMINAL]';
+      this.targets[1].label = '[CAM_02: SPECTRAL ADAPTED & REPAIRED]';
+      this.targets[1].color = '#00f0ff';
 
-      // Broadcast log event into Edge AI chat stream for Module 1
+      StationEventBus.emit('cbdDiagnosticComplete', {
+        scanType: 'GLARE_ADAPTATION',
+        topLine: ">_ [REITER'S CBD // GLARE COMPENSATED]",
+        subText: 'CAM_02 Adaptive Spectral Filter Applied -> Output Error < 4.8% (Nominal)',
+        confidencePct: 98.6,
+        bayesK: 32.4,
+      });
+    } else if (this.scanType === 'CAMERA_PIPELINE') {
+      this.phaseLabel = 'CAMERA PIPELINE VERIFIED // ALL 4 STREAMS NOMINAL';
+      this.faultsRecovered = 0;
+      this.warningBadge = null;
+
+      this.targets.forEach((t) => {
+        t.status = 'NOMINAL';
+      });
+
       StationEventBus.emit('cbdDiagnosticComplete', {
         scanType: 'CAMERA_PIPELINE',
         topLine: ">_ [REITER'S CBD // MULTI-CAM SCAN COMPLETE]",
-        subText: '   CAM_02 Fault Repaired -> All 4 Streams Nominal',
-        confidencePct: 96.4,
-        bayesK: 26.8,
+        subText: 'All 4 Camera Streams Verified & Synchronized (Error < 1.2%)',
+        confidencePct: 99.1,
+        bayesK: 28.4,
+      });
+    } else if (this.scanType === 'EDGE_AI_MODULES') {
+      this.phaseLabel = 'AI CORE SWEEP COMPLETE // ALL MODULES OPTIMAL';
+      this.faultsRecovered = 0;
+      this.warningBadge = null;
+
+      StationEventBus.emit('cbdDiagnosticComplete', {
+        scanType: 'EDGE_AI_MODULES',
+        topLine: ">_ [REITER'S CBD // AI CORE SWEEP COMPLETE]",
+        subText: 'Neural Vision Pipeline & Local LLM Verified (Latency: 8ms, Confidence: 98.2%)',
+        confidencePct: 98.2,
+        bayesK: 34.2,
       });
     }
 
@@ -299,6 +388,11 @@ class CbdDiagnosticManagerClass {
     this.progress = 0;
     this.phaseLabel = 'DIAGNOSTIC READY // AWAITING TRIGGER';
     this.laserSweepY = 1.4;
+    this.isGlareActive = false;
+    this.spectralAdapted = false;
+    this.errorRatePct = 4.2;
+    this.warningBadge = null;
+    this.targets = this.getDefaultTargets();
     this.notify();
   }
 }

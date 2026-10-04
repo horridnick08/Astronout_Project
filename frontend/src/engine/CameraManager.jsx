@@ -36,6 +36,13 @@ export const CAMERA_PRESETS = {
     position: [0, 1.35, 3.4],
     target: [0, 0.9, -0.4],
     autoRotate: true
+  },
+  SERVER_RACK: {
+    id: 'SERVER_RACK',
+    label: 'Server Rack',
+    position: [0.75, 1.35, -0.4],
+    target: [2.15, 1.25, -0.4],
+    autoRotate: false
   }
 };
 
@@ -45,10 +52,13 @@ export const CAMERA_VIEWS = {
   ORBIT_360: 'ORBIT',
   ORBIT: 'ORBIT',
   OTS: 'OTS',
-  WIDE: 'WIDE'
+  WIDE: 'WIDE',
+  SERVER_RACK: 'SERVER_RACK',
+  RADIATION: 'SERVER_RACK'
 };
 
 import { zeroGKinematics } from './useZeroGKinematics.ts';
+import { radiationFaultToleranceManager } from './RadiationFaultToleranceManager.ts';
 
 export default function CameraManager({
   activeView = 'FRONT',
@@ -61,6 +71,19 @@ export default function CameraManager({
 
   const tweenRef = useRef(null);
   const isTransitioningRef = useRef(false);
+  const [targetView, setTargetView] = React.useState(activeView);
+
+  useEffect(() => {
+    setTargetView(activeView);
+  }, [activeView]);
+
+  useEffect(() => {
+    return radiationFaultToleranceManager.subscribe((state) => {
+      if (state.cameraFocused) {
+        setTargetView('SERVER_RACK');
+      }
+    });
+  }, []);
 
   const getEffectivePos = () => {
     if (astronautPos && (astronautPos.x !== 0 || astronautPos.y !== 0 || astronautPos.z !== 0)) {
@@ -89,13 +112,25 @@ export default function CameraManager({
 
     if (key.includes('OTS') || key.includes('SHOULDER') || key.includes('EVA')) {
       return {
-        position: new THREE.Vector3(p.x + CAMERA_PRESETS.OTS.position[0], p.y + CAMERA_PRESETS.OTS.position[1], p.z + CAMERA_PRESETS.OTS.position[2]),
+        position: new THREE.Vector3(p.x + CAMERA_PRESETS.OTS.position[0], p.y + CAMERA_PRESETS.OTS.position[1], p.z + CAMERA_PRESETS.OTS.target ? CAMERA_PRESETS.OTS.position[2] : -1.0),
         target: new THREE.Vector3(p.x + CAMERA_PRESETS.OTS.target[0], p.y + CAMERA_PRESETS.OTS.target[1], p.z + CAMERA_PRESETS.OTS.target[2]),
         autoRotate: false,
         enableRotate: true,
         enableZoom: true,
         minDistance: 0.5,
         maxDistance: 8.0
+      };
+    }
+
+    if (key.includes('SERVER') || key.includes('RACK') || key.includes('RADIATION')) {
+      return {
+        position: new THREE.Vector3(CAMERA_PRESETS.SERVER_RACK.position[0], CAMERA_PRESETS.SERVER_RACK.position[1], CAMERA_PRESETS.SERVER_RACK.position[2]),
+        target: new THREE.Vector3(CAMERA_PRESETS.SERVER_RACK.target[0], CAMERA_PRESETS.SERVER_RACK.target[1], CAMERA_PRESETS.SERVER_RACK.target[2]),
+        autoRotate: false,
+        enableRotate: true,
+        enableZoom: true,
+        minDistance: 0.3,
+        maxDistance: 6.0
       };
     }
 
@@ -128,7 +163,7 @@ export default function CameraManager({
     const controls = effectiveControlsRef.current;
     if (!controls) return;
 
-    const config = getCameraConfig(activeView, getEffectivePos());
+    const config = getCameraConfig(targetView, getEffectivePos());
     if (tweenRef.current) tweenRef.current.kill();
 
     isTransitioningRef.current = true;
@@ -178,7 +213,7 @@ export default function CameraManager({
       if (tweenRef.current) tweenRef.current.kill();
       controls.enabled = true;
     };
-  }, [activeView, camera]);
+  }, [targetView, camera]);
 
   // Keep camera tracking astronaut position when moving (unless manually orbiting)
   useFrame(() => {
@@ -189,11 +224,11 @@ export default function CameraManager({
 
     if (activeView === 'OTS' || activeView === 'FRONT' || String(activeView).includes('FRONT') || String(activeView).includes('SHOULDER')) {
       const config = getCameraConfig(activeView, curPos);
-      controls.target.lerp(config.target, 0.05);
-      camera.position.lerp(config.position, 0.05);
+      controls.target.lerp(config.target, 0.08);
+      camera.position.lerp(config.position, 0.08);
     } else if (String(activeView).includes('ORBIT')) {
       const chestTarget = new THREE.Vector3(curPos.x, curPos.y + 1.1, curPos.z);
-      controls.target.lerp(chestTarget, 0.05);
+      controls.target.lerp(chestTarget, 0.08);
     }
     controls.update();
   });

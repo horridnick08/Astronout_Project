@@ -121,7 +121,7 @@ export default function CbdDiagnostic3DVisuals() {
           <meshBasicMaterial
             color="#00f0ff"
             transparent
-            opacity={0.3}
+            opacity={0.25}
             side={THREE.DoubleSide}
             depthWrite={false}
           />
@@ -129,11 +129,117 @@ export default function CbdDiagnostic3DVisuals() {
       </group>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* MODULE 1: SEQUENTIAL MULTI-CAMERA TARGET RETICLES (CAM 01-04) */}
+      {/* MODULE 1: SPECTRAL GLARE & AMBIENT ADAPTATION                 */}
       {/* ───────────────────────────────────────────────────────────── */}
-      {scanType !== 'EDGE_AI_MODULES' && (
+      {scanType === 'GLARE_ADAPTATION' && (
         <>
-          {/* STEP 1: ONLY CAM_01 -> Green Box [CAM_01: ONLINE] */}
+          {/* STEP 1 & 2: ONLY CAM_02 -> High Glare / Spectral Distortion Spike */}
+          {(step === 1 || step === 2) && targets[1] && (
+            <group position={targets[1].position}>
+              <pointLight color="#ff3300" intensity={4.8} distance={7} decay={2} />
+              <mesh>
+                <sphereGeometry args={[0.16, 16, 16]} />
+                <meshBasicMaterial color="#ff2a00" transparent opacity={0.85} />
+              </mesh>
+              <mesh rotation={[0, 0, pulseRef.current * 2]}>
+                <ringGeometry args={[0.18, 0.72, 32]} />
+                <meshBasicMaterial
+                  color="#ffaa00"
+                  transparent
+                  opacity={0.55}
+                  side={THREE.DoubleSide}
+                  depthWrite={false}
+                  blending={THREE.AdditiveBlending}
+                />
+              </mesh>
+              <lineSegments geometry={targetEdgesGeom}>
+                <lineBasicMaterial color="#ffaa00" linewidth={2} transparent opacity={0.95} />
+              </lineSegments>
+              <lineSegments geometry={cornerLinesGeom}>
+                <lineBasicMaterial color="#ff3300" linewidth={3} transparent opacity={1.0} />
+              </lineSegments>
+              <Html position={[0, 0.58, 0]} center distanceFactor={14} style={{ pointerEvents: 'none' }}>
+                <div
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    color: '#ffaa00',
+                    backgroundColor: 'rgba(20, 8, 8, 0.92)',
+                    borderColor: 'rgba(255, 170, 0, 0.9)',
+                    boxShadow: '0 0 16px rgba(255, 80, 0, 0.6), 0 0 6px rgba(255, 170, 0, 0.9)',
+                    padding: '2.5px 7px',
+                    borderRadius: '4px',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    whiteSpace: 'nowrap',
+                    textShadow: '0 0 6px rgba(255, 170, 0, 0.9)',
+                    animation: 'pulse 0.6s infinite',
+                  }}
+                >
+                  [CAM_02: HIGH GLARE / SPECTRAL DISTORTION]
+                </div>
+              </Html>
+            </group>
+          )}
+
+          {/* STEP 3 & 4: ONLY CAM_02 -> Cyan Calibrated Box [CAM_02: SPECTRAL ADAPTED & REPAIRED] */}
+          {(step === 3 || step === 4) && targets[1] && (
+            <group position={targets[1].position}>
+              <pointLight color="#00f0ff" intensity={2.4} distance={5} decay={2} />
+              <mesh rotation={[0, 0, -pulseRef.current * 1.5]}>
+                <ringGeometry args={[0.22, 0.65, 32]} />
+                <meshBasicMaterial
+                  color="#00f0ff"
+                  transparent
+                  opacity={0.4}
+                  side={THREE.DoubleSide}
+                  depthWrite={false}
+                  blending={THREE.AdditiveBlending}
+                />
+              </mesh>
+              <lineSegments geometry={targetEdgesGeom}>
+                <lineBasicMaterial color="#00f0ff" linewidth={2} transparent opacity={0.95} />
+              </lineSegments>
+              <lineSegments geometry={cornerLinesGeom}>
+                <lineBasicMaterial color="#00f0ff" linewidth={3} transparent opacity={1.0} />
+              </lineSegments>
+              <mesh>
+                <boxGeometry args={[0.45, 0.45, 0.45]} />
+                <meshBasicMaterial color="#00f0ff" wireframe transparent opacity={0.4} />
+              </mesh>
+              <Html position={[0, 0.58, 0]} center distanceFactor={14} style={{ pointerEvents: 'none' }}>
+                <div
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    color: '#00f0ff',
+                    backgroundColor: 'rgba(6, 18, 28, 0.92)',
+                    borderColor: 'rgba(0, 240, 255, 0.85)',
+                    boxShadow: '0 0 16px rgba(0, 240, 255, 0.6), 0 0 6px rgba(0, 240, 255, 0.9)',
+                    padding: '2.5px 7px',
+                    borderRadius: '4px',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    whiteSpace: 'nowrap',
+                    textShadow: '0 0 8px rgba(0, 240, 255, 0.9)',
+                  }}
+                >
+                  [CAM_02: SPECTRAL ADAPTED & REPAIRED]
+                </div>
+              </Html>
+            </group>
+          )}
+        </>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* MODULE 2: CAMERA PIPELINE CONSISTENCY CHECK (CAM 01 - 04)     */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {scanType === 'CAMERA_PIPELINE' && (
+        <>
+          {/* STEP 1: Strictly CAM_01 */}
           {step === 1 && targets[0] && (
             <group position={targets[0].position}>
               <lineSegments geometry={targetEdgesGeom}>
@@ -142,10 +248,6 @@ export default function CbdDiagnostic3DVisuals() {
               <lineSegments geometry={cornerLinesGeom}>
                 <lineBasicMaterial color="#00ff99" linewidth={3} transparent opacity={1.0} />
               </lineSegments>
-              <mesh>
-                <sphereGeometry args={[0.07, 12, 12]} />
-                <meshBasicMaterial color="#00ff99" wireframe transparent opacity={0.6} />
-              </mesh>
               <Html position={[0, 0.55, 0]} center distanceFactor={14} style={{ pointerEvents: 'none' }}>
                 <div
                   style={{
@@ -156,7 +258,7 @@ export default function CbdDiagnostic3DVisuals() {
                     backgroundColor: 'rgba(10, 20, 30, 0.88)',
                     borderColor: 'rgba(0, 255, 153, 0.7)',
                     boxShadow: '0 0 12px rgba(0, 255, 153, 0.4)',
-                    padding: '3px 8px',
+                    padding: '2.5px 7px',
                     borderRadius: '4px',
                     borderWidth: '1px',
                     borderStyle: 'solid',
@@ -170,84 +272,75 @@ export default function CbdDiagnostic3DVisuals() {
             </group>
           )}
 
-          {/* STEP 2: ONLY CAM_02 -> Pulsing Yellow Box [CAM_02: FAULT DETECTED] */}
+          {/* STEP 2: Strictly CAM_02 */}
           {step === 2 && targets[1] && (
             <group position={targets[1].position}>
               <lineSegments geometry={targetEdgesGeom}>
-                <lineBasicMaterial color="#ffaa00" linewidth={2} transparent opacity={0.95} />
+                <lineBasicMaterial color="#00ff99" linewidth={2} transparent opacity={0.9} />
               </lineSegments>
               <lineSegments geometry={cornerLinesGeom}>
-                <lineBasicMaterial color="#ffaa00" linewidth={3} transparent opacity={1.0} />
+                <lineBasicMaterial color="#00ff99" linewidth={3} transparent opacity={1.0} />
               </lineSegments>
-              <mesh>
-                <sphereGeometry args={[0.09, 12, 12]} />
-                <meshBasicMaterial color="#ffaa00" wireframe transparent opacity={0.8} />
-              </mesh>
               <Html position={[0, 0.55, 0]} center distanceFactor={14} style={{ pointerEvents: 'none' }}>
                 <div
                   style={{
                     fontFamily: 'monospace',
                     fontSize: '10px',
                     fontWeight: 'bold',
-                    color: '#ffaa00',
+                    color: '#00ff99',
                     backgroundColor: 'rgba(10, 20, 30, 0.88)',
-                    borderColor: 'rgba(255, 170, 0, 0.8)',
-                    boxShadow: '0 0 15px rgba(255, 170, 0, 0.5)',
-                    padding: '3px 8px',
+                    borderColor: 'rgba(0, 255, 153, 0.7)',
+                    boxShadow: '0 0 12px rgba(0, 255, 153, 0.4)',
+                    padding: '2.5px 7px',
                     borderRadius: '4px',
                     borderWidth: '1px',
                     borderStyle: 'solid',
                     whiteSpace: 'nowrap',
-                    textShadow: '0 0 6px rgba(255, 170, 0, 0.8)',
-                    animation: 'pulse 0.8s infinite',
+                    textShadow: '0 0 6px rgba(0, 255, 153, 0.8)',
                   }}
                 >
-                  [CAM_02: FAULT DETECTED]
+                  [CAM_02: ONLINE]
                 </div>
               </Html>
             </group>
           )}
 
-          {/* STEP 3: ONLY CAM_02 -> Cyan Locked Box [CAM_02: REPAIRED] */}
-          {step === 3 && targets[1] && (
-            <group position={targets[1].position}>
+          {/* STEP 3: Strictly CAM_03 */}
+          {step === 3 && targets[2] && (
+            <group position={targets[2].position}>
               <lineSegments geometry={targetEdgesGeom}>
-                <lineBasicMaterial color="#00f0ff" linewidth={2} transparent opacity={0.95} />
+                <lineBasicMaterial color="#00ff99" linewidth={2} transparent opacity={0.9} />
               </lineSegments>
               <lineSegments geometry={cornerLinesGeom}>
-                <lineBasicMaterial color="#00f0ff" linewidth={3} transparent opacity={1.0} />
+                <lineBasicMaterial color="#00ff99" linewidth={3} transparent opacity={1.0} />
               </lineSegments>
-              <mesh>
-                <boxGeometry args={[0.45, 0.45, 0.45]} />
-                <meshBasicMaterial color="#00f0ff" wireframe transparent opacity={0.4} />
-              </mesh>
               <Html position={[0, 0.55, 0]} center distanceFactor={14} style={{ pointerEvents: 'none' }}>
                 <div
                   style={{
                     fontFamily: 'monospace',
                     fontSize: '10px',
                     fontWeight: 'bold',
-                    color: '#00f0ff',
+                    color: '#00ff99',
                     backgroundColor: 'rgba(10, 20, 30, 0.88)',
-                    borderColor: 'rgba(0, 240, 255, 0.75)',
-                    boxShadow: '0 0 16px rgba(0, 240, 255, 0.5)',
-                    padding: '3px 8px',
+                    borderColor: 'rgba(0, 255, 153, 0.7)',
+                    boxShadow: '0 0 12px rgba(0, 255, 153, 0.4)',
+                    padding: '2.5px 7px',
                     borderRadius: '4px',
                     borderWidth: '1px',
                     borderStyle: 'solid',
                     whiteSpace: 'nowrap',
-                    textShadow: '0 0 8px rgba(0, 240, 255, 0.8)',
+                    textShadow: '0 0 6px rgba(0, 255, 153, 0.8)',
                   }}
                 >
-                  [CAM_02: REPAIRED]
+                  [CAM_03: ONLINE]
                 </div>
               </Html>
             </group>
           )}
 
-          {/* STEP 4: ONLY Final Node Status -> [ALL STREAMS NOMINAL] */}
-          {step === 4 && (
-            <group position={[0, 2.0, -3.2]}>
+          {/* STEP 4: Strictly CAM_04 */}
+          {step === 4 && targets[3] && (
+            <group position={targets[3].position}>
               <lineSegments geometry={targetEdgesGeom}>
                 <lineBasicMaterial color="#00ff99" linewidth={2} transparent opacity={0.9} />
               </lineSegments>
@@ -264,7 +357,7 @@ export default function CbdDiagnostic3DVisuals() {
                     backgroundColor: 'rgba(10, 20, 30, 0.88)',
                     borderColor: 'rgba(0, 255, 153, 0.75)',
                     boxShadow: '0 0 16px rgba(0, 255, 153, 0.5)',
-                    padding: '3px 8px',
+                    padding: '2.5px 7px',
                     borderRadius: '4px',
                     borderWidth: '1px',
                     borderStyle: 'solid',
@@ -272,7 +365,7 @@ export default function CbdDiagnostic3DVisuals() {
                     textShadow: '0 0 6px rgba(0, 255, 153, 0.8)',
                   }}
                 >
-                  [ALL STREAMS NOMINAL]
+                  [ALL 4 STREAMS NOMINAL]
                 </div>
               </Html>
             </group>
@@ -281,7 +374,7 @@ export default function CbdDiagnostic3DVisuals() {
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* MODULE 2: FOCUSED WIREFRAME MATRIX BOX (AI Core Station)      */}
+      {/* MODULE 3: AI CORE & NEURAL MODULE SWEEP (AI Core Station)     */}
       {/* ───────────────────────────────────────────────────────────── */}
       {scanType === 'EDGE_AI_MODULES' && (
         <group position={[0, 1.35, -2.4]}>
@@ -305,7 +398,7 @@ export default function CbdDiagnostic3DVisuals() {
             <meshBasicMaterial color={step === 4 ? '#00ff99' : '#00f0ff'} wireframe transparent opacity={0.65} />
           </mesh>
 
-          {/* Sequential Badges for Module 2 */}
+          {/* Strictly ONE badge visible per step on AI matrix */}
           {step === 1 && (
             <Html position={[0, 0.95, 0]} center distanceFactor={14} style={{ pointerEvents: 'none' }}>
               <div
@@ -317,7 +410,7 @@ export default function CbdDiagnostic3DVisuals() {
                   backgroundColor: 'rgba(10, 20, 30, 0.88)',
                   borderColor: 'rgba(0, 240, 255, 0.75)',
                   boxShadow: '0 0 14px rgba(0, 240, 255, 0.4)',
-                  padding: '3px 8px',
+                  padding: '2.5px 7px',
                   borderRadius: '4px',
                   borderWidth: '1px',
                   borderStyle: 'solid',
@@ -325,7 +418,7 @@ export default function CbdDiagnostic3DVisuals() {
                   textShadow: '0 0 6px rgba(0, 240, 255, 0.8)',
                 }}
               >
-                [NPU THREADS: ACTIVE]
+                [NPU THREADS: ALLOCATED]
               </div>
             </Html>
           )}
@@ -341,7 +434,7 @@ export default function CbdDiagnostic3DVisuals() {
                   backgroundColor: 'rgba(10, 20, 30, 0.88)',
                   borderColor: 'rgba(0, 255, 153, 0.75)',
                   boxShadow: '0 0 14px rgba(0, 255, 153, 0.4)',
-                  padding: '3px 8px',
+                  padding: '2.5px 7px',
                   borderRadius: '4px',
                   borderWidth: '1px',
                   borderStyle: 'solid',
@@ -349,7 +442,7 @@ export default function CbdDiagnostic3DVisuals() {
                   textShadow: '0 0 6px rgba(0, 255, 153, 0.8)',
                 }}
               >
-                [NEURAL HEAD #03: SYNCHRONIZED]
+                [NEURAL HEAD SYNCHRONIZED]
               </div>
             </Html>
           )}
@@ -365,7 +458,7 @@ export default function CbdDiagnostic3DVisuals() {
                   backgroundColor: 'rgba(10, 20, 30, 0.88)',
                   borderColor: 'rgba(0, 240, 255, 0.75)',
                   boxShadow: '0 0 14px rgba(0, 240, 255, 0.4)',
-                  padding: '3px 8px',
+                  padding: '2.5px 7px',
                   borderRadius: '4px',
                   borderWidth: '1px',
                   borderStyle: 'solid',
@@ -387,9 +480,9 @@ export default function CbdDiagnostic3DVisuals() {
                   fontWeight: 'bold',
                   color: '#00ff99',
                   backgroundColor: 'rgba(10, 20, 30, 0.88)',
-                  borderColor: 'rgba(0, 255, 153, 0.8)',
-                  boxShadow: '0 0 18px rgba(0, 255, 153, 0.5)',
-                  padding: '3px 8px',
+                  borderColor: 'rgba(0, 255, 153, 0.75)',
+                  boxShadow: '0 0 14px rgba(0, 255, 153, 0.4)',
+                  padding: '2.5px 7px',
                   borderRadius: '4px',
                   borderWidth: '1px',
                   borderStyle: 'solid',
@@ -397,7 +490,7 @@ export default function CbdDiagnostic3DVisuals() {
                   textShadow: '0 0 6px rgba(0, 255, 153, 0.8)',
                 }}
               >
-                [AI CORE: OPTIMAL]
+                [AI CORE OPTIMAL]
               </div>
             </Html>
           )}

@@ -1,25 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import SpaceStationScene from './components/SpaceStationScene.tsx';
 import ControlHUD from './components/ui/ControlHUD.tsx';
+import LiveAstronautFeed from './components/ui/LiveAstronautFeed.tsx';
+import ProtocolGraphCanvas from './components/ui/ProtocolGraphCanvas.tsx';
 import { CAMERA_VIEWS } from './engine/CameraManager.jsx';
 import { mocapEngine } from './engine/MocapEngine.js';
 
 /**
  * App.jsx
  * 
- * SpaceBuddy Production Aerospace Simulation Orchestrator:
- * - Decoupled R3F SpaceStationScene with modular assets:
- *   1. SpaceshipCorridor (Static interior hull shell)
- *   2. AstronautAvatar (Rigged character driven by useZeroGKinematics & useMissionTimeline)
- *   3. WorkstationModules (Dispersed 10m-20m apart, ergonomically scaled with child hardware)
- *   4. StorageBayBarrels (Separately loaded at far-end storage bay [-1.85, 0, -16.0])
- *   5. QuantumReactorBay (Separately loaded at [2.15, 0.9, -16.5])
- *   6. SatelliteBulkheadDisplay (Central bulkhead radar monitor & 3D Earth Hologram)
- * - Clean Viewport:
- *   - Left side completely transparent (no left control panel)
- *   - Top utility rail with camera preset buttons
- *   - Bottom-center Subtitle HUD Overlay
- *   - Right sidebar with empty expansion bay + bottom CAM STANDBY
+ * SpaceStation Mission Telemetry & Interactive Viewport Orchestrator:
+ * - 3D WebGL Space Station Simulation (Main Viewport / Minified PiP on Viewport Swap)
+ * - Live Looping Astronaut Video Feed with AI HUD Tracking Overlays (PiP / Main Viewport)
+ * - Transparent Cybernetic HUD & Controls
  */
 export default function App() {
   const videoRef = useRef(null);
@@ -27,6 +20,9 @@ export default function App() {
 
   // Camera Preset State
   const [activeCameraView, setActiveCameraView] = useState(CAMERA_VIEWS.FRONT);
+
+  // Viewport Swap State: Live Video Feed <-> 3D WebGL Simulation
+  const [isCameraSwapped, setIsCameraSwapped] = useState(false);
 
   // Live Mocap & Kinematics State
   const [isLiveMocap, setIsLiveMocap] = useState(false);
@@ -47,15 +43,27 @@ export default function App() {
     };
   }, []);
 
+  const handleToggleViewportSwap = () => {
+    setIsCameraSwapped((prev) => !prev);
+  };
+
   return (
     <main className="w-screen h-screen relative overflow-hidden bg-slate-950 select-none">
-      {/* Decoupled 3D WebGL Space Station Simulation */}
+      {/* 3D WebGL Space Station Simulation */}
       <SpaceStationScene
         activeCameraView={activeCameraView}
         onBonesDiscovered={setDiscoveredBones}
+        isSwapped={isCameraSwapped}
+        onToggleSwap={handleToggleViewportSwap}
       />
 
-      {/* Cybernetic HUD Interface with Subtitle Overlay & Transparent Left Area */}
+      {/* Live Looping Video Feed with AI Object/Pose Tracking Overlays */}
+      <LiveAstronautFeed
+        isSwapped={isCameraSwapped}
+        onToggleSwap={handleToggleViewportSwap}
+      />
+
+      {/* Cybernetic HUD Interface with Subtitle Overlay & Utility Sidebar */}
       <ControlHUD
         activeCameraView={activeCameraView}
         onSelectCameraView={setActiveCameraView}
@@ -65,7 +73,11 @@ export default function App() {
         latency={latency}
         landmarks={landmarks}
       />
+
+      {/* Fullscreen 3D Interactive JSON-LD Runtime Node Graph Simulation Viewport */}
+      <ProtocolGraphCanvas />
     </main>
   );
 }
+
 

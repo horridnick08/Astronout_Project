@@ -12,6 +12,8 @@ import CorridorSciFiDetails from './3d/CorridorSciFiDetails.tsx';
 import ObservationWindow from './3d/ObservationWindow.tsx';
 import ConvexHullBoundaries from './3d/ConvexHullBoundaries.tsx';
 import CbdDiagnostic3DVisuals from './3d/CbdDiagnostic3DVisuals.tsx';
+import SpaceshipServerRack3D from './3d/SpaceshipServerRack3D.tsx';
+import TimedAutomaton3DVisuals from './3d/TimedAutomaton3DVisuals.tsx';
 import CameraManager, { CAMERA_VIEWS } from '../engine/CameraManager.jsx';
 
 /**
@@ -33,15 +35,88 @@ interface SpaceStationSceneProps {
   activeCameraView?: string;
   astronautPosition?: THREE.Vector3;
   onBonesDiscovered?: (bones: string[]) => void;
+  isSwapped?: boolean;
+  onToggleSwap?: () => void;
 }
 
 export default function SpaceStationScene({
   activeCameraView = CAMERA_VIEWS.FRONT,
   astronautPosition = new THREE.Vector3(0, 0, 0),
-  onBonesDiscovered
+  onBonesDiscovered,
+  isSwapped = false,
+  onToggleSwap,
 }: SpaceStationSceneProps) {
   return (
-    <div style={{ width: '100%', height: '100%', position: 'absolute', inset: 0, overflow: 'hidden', background: '#020617' }}>
+    <div
+      id="space-station-3d-viewport"
+      style={
+        isSwapped
+          ? {
+              position: 'fixed',
+              right: '1rem',
+              bottom: '1rem',
+              width: '310px',
+              height: '192px',
+              zIndex: 30,
+              borderRadius: '0.75rem',
+              overflow: 'hidden',
+              backgroundColor: '#020617',
+              borderColor: 'rgba(0, 240, 255, 0.45)',
+              boxShadow:
+                '0 20px 50px rgba(0, 0, 0, 0.85), 0 0 25px rgba(0, 240, 255, 0.25)',
+              transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+            }
+          : {
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              overflow: 'hidden',
+              background: '#020617',
+              zIndex: 0,
+              transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+            }
+      }
+      className={isSwapped ? 'border backdrop-blur-xl pointer-events-auto' : ''}
+    >
+      {/* When Swapped into PiP mode, display a sleek sci-fi HUD header with Swap/Restore button */}
+      {isSwapped && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            padding: '6px 10px',
+            backgroundColor: 'rgba(2, 6, 23, 0.85)',
+            borderBottom: '1px solid rgba(0, 240, 255, 0.25)',
+            zIndex: 20,
+          }}
+          className="flex items-center justify-between font-mono backdrop-blur-md"
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00f0ff] shrink-0" />
+            <span className="text-[10px] font-mono font-bold text-cyan-300 tracking-[0.05em] uppercase truncate">
+              3D SIMULATION // CORRIDOR
+            </span>
+          </div>
+
+          <button
+            id="btn-swap-restore-3d"
+            onClick={onToggleSwap}
+            title="Restore 3D Simulation to Main Viewport"
+            style={{
+              padding: '2px 8px',
+              fontSize: '9.5px',
+              borderColor: 'rgba(0, 240, 255, 0.45)',
+              backgroundColor: 'rgba(10, 25, 40, 0.85)',
+            }}
+            className="flex items-center gap-1 rounded border text-cyan-300 hover:text-white hover:border-cyan-300 hover:bg-cyan-950 transition-all font-mono font-bold uppercase tracking-[0.05em] shrink-0 cursor-pointer shadow-sm active:scale-95"
+          >
+            <span>[⛶ RESTORE]</span>
+          </button>
+        </div>
+      )}
       <Canvas
         camera={{
           position: [0, 1.15, 2.1],
@@ -146,8 +221,14 @@ export default function SpaceStationScene({
           {/* 8. Volumetric Workspace Convex Hull Boundary System */}
           <ConvexHullBoundaries />
 
-          {/* 9. USP 11: CBD Diagnostic Engine 3D Laser Grid Wave & Target Reticles */}
+          {/* 9. CBD Diagnostic Engine 3D Laser Grid Wave & Target Reticles */}
           <CbdDiagnostic3DVisuals />
+
+          {/* 10. Spaceship Server Room / Computer Rack & Radiation Fault Tolerance Laser */}
+          <SpaceshipServerRack3D />
+
+          {/* 11. Timed Automaton Verifier Holographic Ghost & Temporal Timeline */}
+          <TimedAutomaton3DVisuals />
         </Suspense>
       </Canvas>
     </div>

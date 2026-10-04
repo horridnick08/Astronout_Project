@@ -6,6 +6,7 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 import { discoverBones } from '../../engine/MocapEngine.js';
 import { missionTimeline } from '../../engine/useMissionTimeline.ts';
 import { zeroGKinematics } from '../../engine/useZeroGKinematics.ts';
+import { digitalTwinReplayManager } from '../../engine/DigitalTwinReplayManager.ts';
 
 const PACK_PATH = '/models/astronaut/space_sci_fi_pack.glb';
 
@@ -294,6 +295,55 @@ export default function AstronautAvatar({
       kin.position.z
     );
     rootGroupRef.current.quaternion.copy(kin.quaternion);
+
+    // 4b. Digital Twin Replay Override & Kinematic Sync
+    digitalTwinReplayManager.update(delta);
+    const replayState = digitalTwinReplayManager.getState();
+    if (replayState.isActive) {
+      const replayTransform = digitalTwinReplayManager.getCurrentTransform();
+      rootGroupRef.current.position.set(
+        replayTransform.position.x,
+        replayTransform.elevationY,
+        replayTransform.position.z
+      );
+      rootGroupRef.current.quaternion.copy(replayTransform.quaternion);
+
+      // Keep zeroGKinematics in sync for camera tracking & biomechanical HUD
+      zeroGKinematics.position.copy(replayTransform.position);
+      zeroGKinematics.elevationY = replayTransform.elevationY;
+      zeroGKinematics.quaternion.copy(replayTransform.quaternion);
+
+      // Procedural skeletal limb animation during replay playback & scrubbing
+      const currentKf = replayState.currentKeyframe;
+      const replayPose = currentKf.isTransit
+        ? 'REST'
+        : currentKf.stationId === 5
+        ? 'QUANTUM_CORE_LIFT'
+        : currentKf.stationId === 2
+        ? 'BARREL_SEARCH'
+        : currentKf.stationId === 3
+        ? 'WINDOW_INSPECTION'
+        : currentKf.stationId === 6
+        ? 'BUTTON_PRESS'
+        : 'PILOT_CALIBRATION';
+
+      if (!currentKf.isTransit) {
+        zeroGKinematics.stationInteractionWeight = 1.0;
+      } else {
+        zeroGKinematics.stationInteractionWeight = 0.0;
+      }
+
+      zeroGKinematics.applyConstrainedLimbIK(
+        bones,
+        replayPose,
+        replayState.currentTime,
+        delta,
+        restEuler,
+        0.1,
+        currentKf.isTransit || replayState.isPlaying,
+        currentKf.isTransit ? (replayState.currentTime % 3.0) / 3.0 : 0
+      );
+    }
 
     // 5. Physical Mesh Attachment / Mechanical Parenting of Quantum Core
     const activeHandBone = bones.rightHand || (isolatedAstronautScene ? (

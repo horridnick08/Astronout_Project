@@ -24,12 +24,47 @@ export interface OopsReboundEvent {
   severity: 'MINOR' | 'MAJOR';
 }
 
+export interface KineticDeviationEvent {
+  areaName: string;
+  liveDelta: number;    // m/s
+  maxAllowed: number;   // m/s
+  handSide: 'LEFT' | 'RIGHT' | 'BOTH';
+  deviatingLayer?: 'FINGER_JITTER' | 'PALM_WRIST' | 'HAND_MOTION' | null;
+}
+
+export interface KineticRecoveredEvent {
+  areaName: string;
+  stableDelta: number;
+}
+
+export interface KineticThrottlingEvent {
+  enabled: boolean;
+  areaName: string;
+  maxAllowed: number;
+}
+
 export interface CbdDiagnosticCompleteEvent {
-  scanType: 'CAMERA_PIPELINE' | 'EDGE_AI_MODULES';
+  scanType: 'GLARE_ADAPTATION' | 'CAMERA_PIPELINE' | 'EDGE_AI_MODULES';
   topLine: string;
   subText: string;
   confidencePct: number;
   bayesK: number;
+}
+
+export interface DigitalTwinPacketEvent {
+  payloadSize: string;
+  signature?: string;
+  timestamp?: string;
+}
+
+export interface RadiationBitFlipDetectedEvent {
+  blockNumber: number;
+  memoryAddress?: string;
+}
+
+export interface RadiationAutoRepairedEvent {
+  blockNumber: number;
+  correctedVia: string;
 }
 
 type EventMap = {
@@ -37,6 +72,12 @@ type EventMap = {
   oopsRebound: OopsReboundEvent;
   boundaryActivated: any;
   cbdDiagnosticComplete: CbdDiagnosticCompleteEvent;
+  kineticDeviation: KineticDeviationEvent;
+  kineticRecovered: KineticRecoveredEvent;
+  kineticThrottling: KineticThrottlingEvent;
+  digitalTwinPacketGenerated: DigitalTwinPacketEvent;
+  radiationBitFlipDetected: RadiationBitFlipDetectedEvent;
+  radiationAutoRepaired: RadiationAutoRepairedEvent;
 };
 
 type Listener<T> = (payload: T) => void;
