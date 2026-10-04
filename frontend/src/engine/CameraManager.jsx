@@ -11,30 +11,30 @@ export const CAMERA_PRESETS = {
   FRONT: {
     id: 'FRONT',
     label: 'Close Front',
-    position: [0, 1.25, 2.2],
-    target: [0, 1.15, 0],
+    position: [0, 1.15, 2.1],
+    target: [0, 0.95, 0],
     autoRotate: true
   },
   ORBIT: {
     id: 'ORBIT',
     label: '360° Orbit',
-    position: [0, 1.35, 3.2],
-    target: [0, 1.1, 0],
+    position: [0, 1.25, 2.6],
+    target: [0, 0.95, 0],
     autoRotate: true,
     autoRotateSpeed: 2.0
   },
   OTS: {
     id: 'OTS',
     label: 'Over-Shoulder',
-    position: [0.45, 1.45, -1.2],
-    target: [0, 1.15, 2.5],
+    position: [0.55, 1.35, -1.0],
+    target: [0, 1.0, 0.3],
     autoRotate: false
   },
   WIDE: {
     id: 'WIDE',
     label: 'Corridor Wide',
-    position: [0, 1.5, 4.8],
-    target: [0, 1.0, 0],
+    position: [0, 1.35, 3.4],
+    target: [0, 0.9, -0.4],
     autoRotate: true
   }
 };
@@ -48,9 +48,11 @@ export const CAMERA_VIEWS = {
   WIDE: 'WIDE'
 };
 
+import { zeroGKinematics } from './useZeroGKinematics.ts';
+
 export default function CameraManager({
   activeView = 'FRONT',
-  astronautPos = new THREE.Vector3(0, 0, 0),
+  astronautPos = null,
   controlsRef = null
 }) {
   const { camera } = useThree();
@@ -60,9 +62,16 @@ export default function CameraManager({
   const tweenRef = useRef(null);
   const isTransitioningRef = useRef(false);
 
+  const getEffectivePos = () => {
+    if (astronautPos && (astronautPos.x !== 0 || astronautPos.y !== 0 || astronautPos.z !== 0)) {
+      return astronautPos;
+    }
+    return zeroGKinematics ? zeroGKinematics.position : new THREE.Vector3(0, 0, 0);
+  };
+
   // Resolve preset configuration relative to astronaut world position
-  const getCameraConfig = (view, pos = astronautPos) => {
-    const p = pos || new THREE.Vector3(0, 0, 0);
+  const getCameraConfig = (view, pos = null) => {
+    const p = pos || getEffectivePos();
     const key = String(view).toUpperCase();
 
     if (key.includes('ORBIT')) {
@@ -119,7 +128,7 @@ export default function CameraManager({
     const controls = effectiveControlsRef.current;
     if (!controls) return;
 
-    const config = getCameraConfig(activeView);
+    const config = getCameraConfig(activeView, getEffectivePos());
     if (tweenRef.current) tweenRef.current.kill();
 
     isTransitioningRef.current = true;
@@ -176,12 +185,14 @@ export default function CameraManager({
     const controls = effectiveControlsRef.current;
     if (!controls || !controls.enabled || isTransitioningRef.current) return;
 
+    const curPos = getEffectivePos();
+
     if (activeView === 'OTS' || activeView === 'FRONT' || String(activeView).includes('FRONT') || String(activeView).includes('SHOULDER')) {
-      const config = getCameraConfig(activeView);
+      const config = getCameraConfig(activeView, curPos);
       controls.target.lerp(config.target, 0.05);
       camera.position.lerp(config.position, 0.05);
     } else if (String(activeView).includes('ORBIT')) {
-      const chestTarget = new THREE.Vector3(astronautPos.x, astronautPos.y + 1.1, astronautPos.z);
+      const chestTarget = new THREE.Vector3(curPos.x, curPos.y + 1.1, curPos.z);
       controls.target.lerp(chestTarget, 0.05);
     }
     controls.update();

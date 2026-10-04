@@ -13,15 +13,21 @@ export const BONE_DICTIONARY = {
   leftUpperArm: ['arm_1L_07', 'arm_1.L_07', 'mixamorigLeftArm', 'mixamorig:LeftArm', 'LeftArm', 'upper_arm.L', 'arm_1.L', 'left_upper_arm'],
   leftLowerArm: ['arm_2L_08', 'arm_2.L_08', 'mixamorigLeftForeArm', 'mixamorig:LeftForeArm', 'LeftForeArm', 'forearm.L', 'arm_2.L', 'left_forearm'],
   leftHand: ['handL_09', 'hand.L_09', 'mixamorigLeftHand', 'mixamorig:LeftHand', 'LeftHand', 'hand.L', 'wrist.L', 'left_hand'],
+  leftIndex: ['finger1_1.L_014', 'mixamorigLeftHandIndex1', 'LeftHandIndex1', 'finger_index.L', 'left_index'],
+  leftMiddle: ['finger2_1.L_010', 'mixamorigLeftHandMiddle1', 'LeftHandMiddle1', 'finger_middle.L', 'left_middle'],
+  leftThumb: ['thumb1.L_022', 'mixamorigLeftHandThumb1', 'LeftHandThumb1', 'thumb.L', 'left_thumb'],
   rightUpperArm: ['arm_1R_030', 'arm_1.R_026', 'arm_1.R_030', 'mixamorigRightArm', 'mixamorig:RightArm', 'RightArm', 'upper_arm.R', 'arm_1.R', 'right_upper_arm'],
   rightLowerArm: ['arm_2R_031', 'arm_2.R_027', 'arm_2.R_031', 'mixamorigRightForeArm', 'mixamorig:RightForeArm', 'RightForeArm', 'forearm.R', 'arm_2.R', 'right_forearm'],
   rightHand: ['handR_032', 'hand.R_028', 'hand.R_032', 'mixamorigRightHand', 'mixamorig:RightHand', 'RightHand', 'hand.R', 'wrist.R', 'right_hand'],
-  leftThigh: ['leg_1L_062', 'hipL_061', 'leg_1.L_050', 'hip.L_049', 'mixamorigLeftUpLeg', 'mixamorig:LeftUpLeg', 'LeftUpLeg', 'thigh.L', 'left_thigh'],
-  leftCalf: ['leg_2L_063', 'leg_2.L_00', 'mixamorigLeftLeg', 'mixamorig:LeftLeg', 'LeftLeg', 'shin.L', 'left_calf'],
-  leftFoot: ['footL_064', 'foot.L_051', 'mixamorigLeftFoot', 'mixamorig:LeftFoot', 'LeftFoot', 'foot.L', 'ankle.L', 'left_foot'],
-  rightThigh: ['leg_1R_068', 'hipR_067', 'leg_1.R_054', 'hip.R_053', 'mixamorigRightUpLeg', 'mixamorig:RightUpLeg', 'RightUpLeg', 'thigh.R', 'right_thigh'],
-  rightCalf: ['leg_2R_069', 'leg_2.R_055', 'mixamorigRightLeg', 'mixamorig:RightLeg', 'RightLeg', 'shin.R', 'right_calf'],
-  rightFoot: ['footR_070', 'foot.R_056', 'mixamorigRightFoot', 'mixamorig:RightFoot', 'RightFoot', 'foot.R', 'ankle.R', 'right_foot']
+  rightIndex: ['finger1_1.R_037', 'mixamorigRightHandIndex1', 'RightHandIndex1', 'finger_index.R', 'right_index'],
+  rightMiddle: ['finger2_1.R_033', 'mixamorigRightHandMiddle1', 'RightHandMiddle1', 'finger_middle.R', 'right_middle'],
+  rightThumb: ['thumb1.R_045', 'mixamorigRightHandThumb1', 'RightHandThumb1', 'thumb.R', 'right_thumb'],
+  leftThigh: ['leg_1.L_062', 'leg_1L_062', 'hip.L_061', 'hipL_061', 'leg_1.L_050', 'hip.L_049', 'mixamorigLeftUpLeg', 'mixamorig:LeftUpLeg', 'LeftUpLeg', 'thigh.L', 'left_thigh'],
+  leftCalf: ['leg_2.L_063', 'leg_2L_063', 'leg_2.L_00', 'mixamorigLeftLeg', 'mixamorig:LeftLeg', 'LeftLeg', 'shin.L', 'left_calf'],
+  leftFoot: ['foot.L_064', 'footL_064', 'foot.L_051', 'mixamorigLeftFoot', 'mixamorig:LeftFoot', 'LeftFoot', 'foot.L', 'ankle.L', 'left_foot'],
+  rightThigh: ['leg_1.R_068', 'leg_1R_068', 'hip.R_067', 'hipR_067', 'leg_1.R_054', 'hip.R_053', 'mixamorigRightUpLeg', 'mixamorig:RightUpLeg', 'RightUpLeg', 'thigh.R', 'right_thigh'],
+  rightCalf: ['leg_2.R_069', 'leg_2R_069', 'leg_2.R_055', 'mixamorigRightLeg', 'mixamorig:RightLeg', 'RightLeg', 'shin.R', 'right_calf'],
+  rightFoot: ['foot.R_070', 'footR_070', 'foot.R_056', 'mixamorigRightFoot', 'mixamorig:RightFoot', 'RightFoot', 'foot.R', 'ankle.R', 'right_foot']
 };
 
 export const BONE_PATTERNS = {
@@ -33,15 +39,21 @@ export const BONE_PATTERNS = {
   leftUpperArm: [/(left|l_|\.l|mixamorig.*left).*arm(?!_2|2)/i, /arm_1\.l/i, /upper_arm.*l/i, /left.*upper.*arm/i],
   leftLowerArm: [/(left|l_|\.l|mixamorig.*left).*forearm/i, /arm_2\.l/i, /lower_arm.*l/i, /forearm.*l/i],
   leftHand: [/(left|l_|\.l|mixamorig.*left).*(hand|wrist)/i, /hand.*l/i, /wrist.*l/i],
+  leftIndex: [/finger1.*\.l/i, /(left|l_|\.l|mixamorig.*left).*index/i],
+  leftMiddle: [/finger2.*\.l/i, /(left|l_|\.l|mixamorig.*left).*middle/i],
+  leftThumb: [/thumb1.*\.l/i, /(left|l_|\.l|mixamorig.*left).*thumb/i],
   rightUpperArm: [/(right|r_|\.r|mixamorig.*right).*arm(?!_2|2)/i, /arm_1\.r/i, /upper_arm.*r/i, /right.*upper.*arm/i],
   rightLowerArm: [/(right|r_|\.r|mixamorig.*right).*forearm/i, /arm_2\.r/i, /lower_arm.*r/i, /forearm.*r/i],
   rightHand: [/(right|r_|\.r|mixamorig.*right).*(hand|wrist)/i, /hand.*r/i, /wrist.*r/i],
-  leftThigh: [/(left|l_|\.l|mixamorig.*left).*(thigh|upleg)/i, /leg_1\.l/i, /thigh.*l/i, /hip\.l/i],
-  leftCalf: [/(left|l_|\.l).*(calf|shin|(?:^|:)leftleg$|leg_2)/i, /mixamorig.*leftleg$/i, /(left|l_|\.l).*leg(?! [_1-9]|upleg)/i],
-  leftFoot: [/(left|l_|\.l|mixamorig.*left).*(foot|ankle)/i, /foot.*l/i, /ankle.*l/i],
-  rightThigh: [/(right|r_|\.r|mixamorig.*right).*(thigh|upleg)/i, /leg_1\.r/i, /thigh.*r/i, /hip\.r/i],
-  rightCalf: [/(right|r_|\.r).*(calf|shin|(?:^|:)rightleg$|leg_2)/i, /mixamorig.*rightleg$/i, /(right|r_|\.r).*leg(?! [_1-9]|upleg)/i],
-  rightFoot: [/(right|r_|\.r|mixamorig.*right).*(foot|ankle)/i, /foot.*r/i, /ankle.*r/i]
+  rightIndex: [/finger1.*\.r/i, /(right|r_|\.r|mixamorig.*right).*index/i],
+  rightMiddle: [/finger2.*\.r/i, /(right|r_|\.r|mixamorig.*right).*middle/i],
+  rightThumb: [/thumb1.*\.r/i, /(right|r_|\.r|mixamorig.*right).*thumb/i],
+  leftThigh: [/(left|l_|\.l|mixamorig.*left).*(thigh|upleg)/i, /leg_1.*\.l/i, /leg_1.*l/i, /thigh.*l/i, /hip\.l/i],
+  leftCalf: [/leg_2.*\.l/i, /leg_2.*l/i, /(left|l_|\.l).*(calf|shin|(?:^|:)leftleg$|leg_2)/i, /mixamorig.*leftleg$/i, /(left|l_|\.l).*leg(?! [_1-9]|upleg)/i],
+  leftFoot: [/foot.*\.l/i, /(left|l_|\.l|mixamorig.*left).*(foot|ankle)/i, /foot.*l/i, /ankle.*l/i],
+  rightThigh: [/(right|r_|\.r|mixamorig.*right).*(thigh|upleg)/i, /leg_1.*\.r/i, /leg_1.*r/i, /thigh.*r/i, /hip\.r/i],
+  rightCalf: [/leg_2.*\.r/i, /leg_2.*r/i, /(right|r_|\.r).*(calf|shin|(?:^|:)rightleg$|leg_2)/i, /mixamorig.*rightleg$/i, /(right|r_|\.r).*leg(?! [_1-9]|upleg)/i],
+  rightFoot: [/foot.*\.r/i, /(right|r_|\.r|mixamorig.*right).*(foot|ankle)/i, /foot.*r/i, /ankle.*r/i]
 };
 
 export const MP_LANDMARKS = {
