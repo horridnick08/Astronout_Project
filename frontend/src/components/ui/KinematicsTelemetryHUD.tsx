@@ -5,6 +5,7 @@ import { zeroGKinematics } from '../../engine/useZeroGKinematics.ts';
 import { KinematicSafetyState } from '../../engine/KinematicSafetyManager.ts';
 import { digitalTwinReplayManager } from '../../engine/DigitalTwinReplayManager.ts';
 import { videoPoseTracker } from '../../engine/VideoPoseTracker.ts';
+import ExpansionSlot02 from './ExpansionSlot02.tsx';
 
 /**
  * KinematicsTelemetryHUD.tsx
@@ -330,7 +331,7 @@ export default function KinematicsTelemetryHUD({ isSidebarOpen, safetyState, isR
         {renderTelemetryContent(false)}
       </div>
 
-      {/* BOX 2: AUXILIARY MODULE // EXPANSION SLOT 02 (Visible in Normal Mode) */}
+      {/* BOX 2: AUXILIARY MODULE // EXPANSION SLOT 02 (Orbital Threat & Edge AI Spatial Radar) */}
       <div
         id="hud-expansion-slot-02"
         style={{
@@ -341,44 +342,7 @@ export default function KinematicsTelemetryHUD({ isSidebarOpen, safetyState, isR
         }}
         className="flex flex-col h-full rounded-xl border backdrop-blur-md overflow-hidden transition-all duration-300 justify-between font-mono"
       >
-        {/* Header Bar */}
-        <div className="flex items-center justify-between pb-1 border-b border-cyan-500/20 shrink-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80 animate-pulse shrink-0" />
-            <h3 className="text-slate-200 font-bold uppercase text-[10px] tracking-[0.03em] truncate whitespace-nowrap">
-              AUXILIARY MODULE // EXPANSION SLOT 02
-            </h3>
-          </div>
-          <span className="text-[9px] text-amber-300 font-mono font-bold px-1.5 py-0.2 rounded bg-amber-950/60 border border-amber-500/30 shrink-0 ml-1">
-            STANDBY
-          </span>
-        </div>
-
-        {/* Clean Professional Standby Interior */}
-        <div className="flex-1 flex flex-col items-center justify-center p-2 my-0.5 rounded-lg border border-dashed border-cyan-500/20 bg-slate-950/40 text-center gap-1.5">
-          <div className="relative flex items-center justify-center">
-            <span className="w-5 h-5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-              <Layers className="w-3 h-3 text-cyan-400/70" />
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[9.5px] font-bold text-cyan-300/90 tracking-wider uppercase font-mono">
-              SYSTEM STANDBY // AWAITING FEATURE TELEMETRY HOOK
-            </span>
-            <span className="text-[8.5px] text-[#a0b0c0] tracking-wide font-mono">
-              BUS 02 READY • DEDICATED EXPANSION CHANNEL
-            </span>
-          </div>
-        </div>
-
-        {/* Bottom Sub-Strip */}
-        <div className="pt-0.5 border-t border-cyan-500/10 flex items-center justify-between text-[7.5px] text-slate-400 leading-none shrink-0">
-          <span className="flex items-center gap-1">
-            <Radio className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
-            SOCKET READY
-          </span>
-          <span className="text-slate-500 font-mono">LATENCY: 0ms</span>
-        </div>
+        <ExpansionSlot02 />
       </div>
     </div>
   );

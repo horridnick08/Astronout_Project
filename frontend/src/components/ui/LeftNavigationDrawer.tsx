@@ -2326,21 +2326,22 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
             </div>
 
             {/* Sub-Header */}
-            <div className="px-3.5 py-2.5 border-b border-[rgba(0,240,255,0.15)] bg-cyan-950/30 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="p-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/15 shrink-0">
+            <div className="px-3 py-2.5 border-b border-[rgba(0,240,255,0.15)] bg-cyan-950/30 flex items-start justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="p-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/15 shrink-0 mt-0.5">
                   <ShieldCheck className="w-4 h-4 text-[#00ff99]" />
                 </div>
-                <div className="flex flex-col text-left">
-                  <span className="text-[14px] font-bold text-white tracking-wide leading-tight">
-                    Timed Automaton Verifier
-                  </span>
-                  <span className="text-[10px] font-semibold text-[#00ff99] tracking-wider leading-snug">
-                    Pre-Flight Script Verification
+                <div className="flex flex-col text-left min-w-0">
+                  <div className="text-[12px] font-mono font-bold uppercase tracking-wider text-white leading-[14px]">
+                    <div className="whitespace-nowrap">TIMED AUTOMATON</div>
+                    <div className="whitespace-nowrap">VERIFIER</div>
+                  </div>
+                  <span className="text-[8.5px] font-mono font-semibold text-[#00ff99] tracking-wider leading-snug mt-0.5 whitespace-nowrap">
+                    PRE-FLIGHT SCRIPT VERIFICATION
                   </span>
                 </div>
               </div>
-              <span className="text-[8px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/40 bg-emerald-950/60 text-[#00ff99] uppercase tracking-wider">
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-cyan-500/40 bg-cyan-950/60 text-cyan-300 uppercase tracking-wider shrink-0 mt-0.5">
                 CTL // UPPAAL
               </span>
             </div>
@@ -2355,23 +2356,38 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
             >
               {/* Telemetry Readouts */}
               <div className="p-2.5 rounded-xl border border-emerald-500/30 bg-slate-950/80 flex flex-col gap-1.5 text-left shadow-[0_0_15px_rgba(0,255,153,0.08)]">
-                <div className="flex items-center justify-between text-[10.5px]">
-                  <span className="text-slate-400 font-semibold uppercase tracking-wider">CHECK ENGINE:</span>
-                  <span className="text-cyan-300 font-bold uppercase tracking-wider">UPPAAL CTL SYMBOLIC</span>
+                <div className="flex items-center justify-between text-[8.5px] font-mono leading-tight whitespace-nowrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: '8.5px', opacity: 0.7 }} className="text-slate-400 font-semibold uppercase tracking-wider whitespace-nowrap">
+                    CHECK ENGINE:
+                  </span>
+                  <span style={{ fontSize: '8.5px' }} className="text-cyan-300 font-bold uppercase tracking-wider whitespace-nowrap">
+                    UPPAAL CTL SYMBOLIC
+                  </span>
                 </div>
-                <div className="flex items-center justify-between text-[10.5px]">
-                  <span className="text-slate-400 font-semibold uppercase tracking-wider">DEADLOCK STATE:</span>
-                  <span className="text-[#00ff99] font-bold uppercase tracking-wider">0 (PROVEN FREE)</span>
+                <div className="flex items-center justify-between text-[8.5px] font-mono leading-tight whitespace-nowrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: '8.5px', opacity: 0.7 }} className="text-slate-400 font-semibold uppercase tracking-wider whitespace-nowrap">
+                    DEADLOCK STATE:
+                  </span>
+                  <span style={{ fontSize: '8.5px' }} className="text-[#00ff99] font-bold uppercase tracking-wider whitespace-nowrap">
+                    0 (PROVEN FREE)
+                  </span>
                 </div>
-                <div className="flex items-center justify-between text-[10.5px]">
-                  <span className="text-slate-400 font-semibold uppercase tracking-wider">VERIFICATION FORMULA:</span>
-                  <span className="text-emerald-300 font-bold uppercase tracking-wider">AG (NOT DEADLOCK)</span>
+                <div className="flex items-center justify-between text-[8.5px] font-mono leading-tight whitespace-nowrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: '8.5px', opacity: 0.7 }} className="text-slate-400 font-semibold uppercase tracking-wider whitespace-nowrap">
+                    VERIFICATION FORMULA:
+                  </span>
+                  <span style={{ fontSize: '8.5px' }} className="text-emerald-300 font-bold uppercase tracking-wider whitespace-nowrap">
+                    AG (NOT DEADLOCK)
+                  </span>
                 </div>
               </div>
 
               {/* Procedure Script Selection List */}
               <div className="flex flex-col gap-1.5">
-                <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-widest text-left">
+                <span
+                  style={{ fontSize: '9px', opacity: 0.7 }}
+                  className="font-mono font-bold text-slate-400 uppercase tracking-widest text-left"
+                >
                   PROCEDURE SCRIPT SELECTION:
                 </span>
 
@@ -2385,8 +2401,9 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
                         backgroundColor: isSelected ? 'rgba(0, 255, 153, 0.12)' : 'rgba(10, 20, 30, 0.75)',
                         borderColor: isSelected ? '#00ff99' : 'rgba(0, 240, 255, 0.25)',
                         boxShadow: isSelected ? '0 0 16px rgba(0, 255, 153, 0.25)' : 'none',
+                        padding: '10px',
                       }}
-                      className="p-2.5 rounded-xl border flex flex-col gap-1.5 cursor-pointer transition-all duration-200 text-left hover:border-emerald-400 group"
+                      className="rounded-xl border flex flex-col gap-1.5 cursor-pointer transition-all duration-200 text-left hover:border-emerald-400 group"
                     >
                       <div className="flex items-start justify-between gap-1.5">
                         <div className="flex items-center gap-1.5 min-w-0">
@@ -2396,7 +2413,8 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
                             }`}
                           />
                           <span
-                            className={`text-[10px] font-bold tracking-wide truncate ${
+                            style={{ fontSize: '8.5px' }}
+                            className={`font-mono font-bold tracking-wide truncate ${
                               isSelected ? 'text-white' : 'text-slate-200 group-hover:text-emerald-300'
                             }`}
                           >
@@ -2404,7 +2422,8 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
                           </span>
                         </div>
                         <span
-                          className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 transition-colors ${
+                          style={{ fontSize: '8.5px' }}
+                          className={`font-mono font-bold px-1.5 py-0.5 rounded border uppercase shrink-0 transition-colors ${
                             isSelected
                               ? 'bg-emerald-950 text-[#00ff99] border-emerald-500/50 shadow-[0_0_8px_rgba(0,255,153,0.3)]'
                               : 'bg-slate-900 text-slate-400 border-slate-700 group-hover:border-emerald-500/30 group-hover:text-emerald-300'
@@ -2414,16 +2433,22 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
                         </span>
                       </div>
 
-                      <span className="text-[9.5px] text-[#00e5ff] font-medium truncate">
+                      <span
+                        style={{ fontSize: '8.5px' }}
+                        className="font-mono text-[#00e5ff] font-medium truncate"
+                      >
                         {script.name} — {script.description}
                       </span>
 
-                      <div className="flex items-center gap-2 text-[8.5px] text-slate-400 pt-0.5 border-t border-emerald-500/15">
-                        <span className="text-emerald-400 uppercase font-semibold truncate">
+                      <div
+                        style={{ fontSize: '8px' }}
+                        className="flex items-center gap-2 font-mono text-slate-400 pt-0.5 border-t border-emerald-500/15 whitespace-nowrap overflow-hidden"
+                      >
+                        <span className="text-emerald-400 uppercase font-semibold truncate shrink-0">
                           {script.statesCount.toLocaleString()} STATES
                         </span>
                         <span className="text-slate-600">•</span>
-                        <span className="text-slate-400 truncate">{script.clocksCount} CLOCKS</span>
+                        <span className="text-slate-400 truncate shrink-0">{script.clocksCount} CLOCKS</span>
                         <span className="text-slate-600">•</span>
                         <span className="text-cyan-400 truncate font-mono">{script.formula}</span>
                       </div>
