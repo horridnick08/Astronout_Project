@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Orbit, User, Maximize2, Compass } from 'lucide-react';
+import { Orbit, User, Maximize2, Compass, AlertTriangle, ShieldCheck, Activity } from 'lucide-react';
 import { CAMERA_VIEWS } from '../../engine/CameraManager.jsx';
 import WebcamFeed from './WebcamFeed.jsx';
 import KinematicsTelemetryHUD from './KinematicsTelemetryHUD.tsx';
@@ -7,6 +7,10 @@ import LeftNavigationDrawer from './LeftNavigationDrawer.tsx';
 import EdgeAIChatLog from './EdgeAIChatLog.tsx';
 import { missionTimeline } from '../../engine/useMissionTimeline.ts';
 import { cbdDiagnosticManager, CbdDiagnosticState } from '../../engine/CbdDiagnosticManager.ts';
+import { kinematicSafetyManager, KinematicSafetyState } from '../../engine/KinematicSafetyManager.ts';
+import DigitalTwinTimelineScrubber from './DigitalTwinTimelineScrubber.tsx';
+import { digitalTwinReplayManager, DigitalTwinReplayState } from '../../engine/DigitalTwinReplayManager.ts';
+import { radiationFaultToleranceManager, RadiationFaultState } from '../../engine/RadiationFaultToleranceManager.ts';
 
 /**
  * ControlHUD.tsx
@@ -49,6 +53,8 @@ export default function ControlHUD({
   const [timelineState, setTimelineState] = useState(missionTimeline.getState());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [diagState, setDiagState] = useState<CbdDiagnosticState>(() => cbdDiagnosticManager.getState());
+  const [safetyState, setSafetyState] = useState<KinematicSafetyState>(() => kinematicSafetyManager.getState());
+  const [replayState, setReplayState] = useState<DigitalTwinReplayState>(() => digitalTwinReplayManager.getState());
 
   useEffect(() => {
     return missionTimeline.subscribe((state) => {
@@ -62,6 +68,22 @@ export default function ControlHUD({
     });
   }, []);
 
+  useEffect(() => {
+    return kinematicSafetyManager.subscribe((state) => setSafetyState(state));
+  }, []);
+
+  useEffect(() => {
+    return digitalTwinReplayManager.subscribe((state) => setReplayState(state));
+  }, []);
+
+  useEffect(() => {
+    return radiationFaultToleranceManager.subscribe((state) => {
+      if (state.cameraFocused) {
+        onSelectCameraView(CAMERA_VIEWS.SERVER_RACK || 'SERVER_RACK');
+      }
+    });
+  }, [onSelectCameraView]);
+
   const isScanning = diagState.status === 'SCANNING';
 
   return (
@@ -71,6 +93,11 @@ export default function ControlHUD({
       {/* 0. LEFT COLLAPSIBLE NAVIGATION DRAWER (Convex Hull Boundary Controls)     */}
       {/* ========================================================================= */}
       <LeftNavigationDrawer isOpen={isSidebarOpen} onToggle={setIsSidebarOpen} />
+
+      {/* ========================================================================= */}
+      {/* 0b. DIGITAL TWIN REPLAY TIMELINE SCRUBBER & TOP BANNER OVERLAY             */}
+      {/* ========================================================================= */}
+      <DigitalTwinTimelineScrubber />
 
       {/* ========================================================================= */}
       {/* 1. TOP UTILITY RAIL: CAMERA SWITCHER BUTTONS & DOCKED DIAGNOSTIC BANNER   */}
@@ -105,51 +132,80 @@ export default function ControlHUD({
           })}
         </div>
 
-        {/* Docked Active Diagnostic Progress Banner (Directly Below Camera Bar) */}
+        {/* Docked Active Diagnostic Step Banner (Strictly Below Camera Bar with clear offset) */}
         {isScanning && (
           <div
             style={{
               backgroundColor: 'rgba(8, 18, 28, 0.94)',
-              borderColor: diagState.step === 2 && diagState.scanType === 'CAMERA_PIPELINE' ? 'rgba(255, 170, 0, 0.6)' : 'rgba(0, 240, 255, 0.45)',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.8), 0 0 16px rgba(0, 240, 255, 0.25)',
+              borderColor: diagState.step === 2 && diagState.scanType === 'GLARE_ADAPTATION' ? 'rgba(255, 170, 0, 0.7)' : 'rgba(0, 240, 255, 0.45)',
+              boxShadow: diagState.step === 2 && diagState.scanType === 'GLARE_ADAPTATION' ? '0 8px 24px rgba(0, 0, 0, 0.8), 0 0 16px rgba(255, 170, 0, 0.35)' : '0 8px 24px rgba(0, 0, 0, 0.8), 0 0 14px rgba(0, 240, 255, 0.2)',
               width: '100%',
-              maxWidth: '350px',
+              maxWidth: '340px',
+              marginTop: '4px',
             }}
-            className="px-3 py-1.5 rounded-xl border flex flex-col items-start gap-1 font-mono backdrop-blur-md transition-all duration-300 pointer-events-auto shadow-lg"
+            className="px-2.5 py-1.5 rounded-lg border flex flex-col items-start gap-1 font-mono backdrop-blur-md transition-all duration-300 pointer-events-auto shadow-lg"
           >
             <div className="flex items-center justify-between w-full gap-2" style={{ fontSize: '10px' }}>
               <div className="flex items-center gap-1.5 text-cyan-300 font-bold tracking-wider uppercase truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping shrink-0" />
+                <span className={`w-1.5 h-1.5 rounded-full ${diagState.step === 2 && diagState.scanType === 'GLARE_ADAPTATION' ? 'bg-amber-400' : 'bg-cyan-400'} animate-ping shrink-0`} />
                 REITER&apos;S DIAGNOSIS STEP {diagState.step}/4
               </div>
               <span
-                style={{ fontSize: '9px' }}
-                className="text-[#88a0b5] font-semibold uppercase tracking-wider shrink-0"
+                style={{ fontSize: '8.5px' }}
+                className={`${diagState.step === 2 && diagState.scanType === 'GLARE_ADAPTATION' ? 'text-amber-400' : 'text-[#88a0b5]'} font-semibold uppercase tracking-wider shrink-0`}
               >
-                {diagState.scanType === 'EDGE_AI_MODULES' ? 'AI CORE' : 'MULTI-CAM'}
+                {diagState.scanType === 'GLARE_ADAPTATION'
+                  ? 'SPECTRAL ADAPTATION'
+                  : diagState.scanType === 'EDGE_AI_MODULES'
+                  ? 'AI CORE MODULES'
+                  : 'CAMERA PIPELINE'}
               </span>
             </div>
             <div
               style={{
-                color: diagState.step === 2 && diagState.scanType === 'CAMERA_PIPELINE' ? '#ffaa00' : '#ffffff',
-                fontSize: '10px',
-                lineHeight: '13px',
+                color: diagState.step === 2 && diagState.scanType === 'GLARE_ADAPTATION' ? '#ffaa00' : '#ffffff',
+                fontSize: '9.5px',
+                lineHeight: '12px',
               }}
               className="font-mono font-medium tracking-wide truncate max-w-full"
             >
               {diagState.phaseLabel}
             </div>
-            {/* Progress Bar */}
+            {/* Compact Progress Bar */}
             <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden border border-cyan-500/30 mt-0.5">
               <div
                 style={{
                   width: `${Math.round(diagState.progress * 100)}%`,
-                  backgroundColor: diagState.step === 2 && diagState.scanType === 'CAMERA_PIPELINE' ? '#ffaa00' : '#00f0ff',
-                  boxShadow: `0 0 8px ${diagState.step === 2 && diagState.scanType === 'CAMERA_PIPELINE' ? '#ffaa00' : '#00f0ff'}`,
+                  backgroundColor: diagState.step === 2 && diagState.scanType === 'GLARE_ADAPTATION' ? '#ffaa00' : '#00f0ff',
+                  boxShadow: `0 0 8px ${diagState.step === 2 && diagState.scanType === 'GLARE_ADAPTATION' ? '#ffaa00' : '#00f0ff'}`,
                 }}
                 className="h-full transition-all duration-100 rounded-full"
               />
             </div>
+          </div>
+        )}
+
+        {/* Compact HUD Warning Badge strictly during active glare distortion in Module 1 */}
+        {isScanning && diagState.scanType === 'GLARE_ADAPTATION' && diagState.step <= 2 && (
+          <div
+            id="hud-badge-glare-warning"
+            style={{ fontSize: '10px', padding: '2px 8px' }}
+            className="flex items-center gap-1.5 rounded-lg border border-amber-500/80 bg-slate-950/90 text-amber-300 font-mono font-bold tracking-wider shadow-[0_0_16px_rgba(255,170,0,0.5)] backdrop-blur-md pointer-events-auto animate-pulse transition-all duration-200 mt-0.5"
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>[CAM_02: HIGH GLARE / SPECTRAL DISTORTION]</span>
+          </div>
+        )}
+
+        {/* Compact HUD Status Badge strictly during active spectral adaptation in Module 1 */}
+        {isScanning && diagState.scanType === 'GLARE_ADAPTATION' && diagState.step >= 3 && (
+          <div
+            id="hud-badge-spectral-repaired"
+            style={{ fontSize: '10px', padding: '2px 8px' }}
+            className="flex items-center gap-1.5 rounded-lg border border-cyan-400/80 bg-slate-950/90 text-cyan-300 font-mono font-bold tracking-wider shadow-[0_0_16px_rgba(0,240,255,0.4)] backdrop-blur-md pointer-events-auto transition-all duration-200 mt-0.5"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-[#00f0ff] shrink-0" />
+            <span>[CAM_02: SPECTRAL ADAPTED & REPAIRED]</span>
           </div>
         )}
       </header>
@@ -157,7 +213,42 @@ export default function ControlHUD({
       {/* ========================================================================= */}
       {/* 2. 2-COLUMN TELEMETRY & STANDBY HUD GRID (Bottom-Left Section)            */}
       {/* ========================================================================= */}
-      <KinematicsTelemetryHUD isSidebarOpen={isSidebarOpen} />
+      <KinematicsTelemetryHUD
+        isSidebarOpen={isSidebarOpen}
+        safetyState={safetyState}
+        isReplayActive={replayState.isActive}
+      />
+
+      {/* ========================================================================= */}
+      {/* KINEMATIC DEVIATION ALERT: Floating Red Monospace Badge (Top/Center)      */}
+      {/* ========================================================================= */}
+      {safetyState.isDeviating && (
+        <div
+          id="hud-badge-kinematic-deviation"
+          style={{
+            position: 'fixed',
+            top: '64px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 50,
+            backgroundColor: 'rgba(32, 6, 6, 0.96)',
+            borderColor: 'rgba(255, 34, 0, 0.85)',
+            boxShadow: '0 0 28px rgba(255, 34, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.9)',
+            fontSize: '10px',
+            padding: '5px 14px',
+          }}
+          className="flex items-center gap-2 rounded-lg border font-mono font-bold tracking-[0.05em] text-red-300 pointer-events-none animate-pulse backdrop-blur-md"
+        >
+          <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+          <span>[CRITICAL KINEMATIC DEVIATION // {(safetyState.activeArea || 'AVIONICS CONSOLE A').toUpperCase()}]</span>
+          <span style={{ color: '#ff6644', fontSize: '10px' }} className="font-normal opacity-90">
+            Δ {safetyState.liveDelta.toFixed(2)} m/s &gt; {safetyState.maxAllowed.toFixed(2)} m/s
+          </span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-950/80 border border-red-500/40 text-red-200 uppercase font-semibold">
+            AUTO-THROTTLED • COMMS MUTED
+          </span>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 3. RIGHT SIDEBAR ALIGNMENT                                                */}
@@ -171,16 +262,8 @@ export default function ControlHUD({
         {/* TOP-RIGHT: EDGE AI // OFFLINE ASSISTANT LIVE CHAT LOG */}
         <EdgeAIChatLog timelineState={timelineState} />
 
-        {/* BOTTOM-RIGHT: CAM STANDBY CARD */}
-        <div className="pointer-events-auto w-full">
-          <WebcamFeed
-            videoRef={videoRef}
-            canvasRef={canvasRef}
-            isLive={isLiveMocap}
-            latency={latency}
-            landmarks={landmarks}
-          />
-        </div>
+        {/* BOTTOM-RIGHT: RESERVED SLOT FOR LIVE FEED / 3D PIP */}
+        <div style={{ height: '192px' }} className="w-full shrink-0 pointer-events-none" />
       </aside>
     </div>
   );
