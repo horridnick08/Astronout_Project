@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Component, ErrorInfo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -8,21 +8,78 @@ import {
 } from '../../engine/TimedAutomatonManager.ts';
 
 /**
- * TimedAutomaton3DVisuals.tsx
- *
- * WebGL 3D Visualization for UPPAAL CTL Timed Automaton Deadlock Verification:
- * 1. Holographic Ghost Simulation: Translucent cyan wireframe avatar executing motion in fast-forward.
- * 2. 3D Temporal Timeline Nodes: Spatial sequence markers (T+0.0s, T+1.2s, T+2.5s).
- * 3. Verification Laser Sweep: Sweeping emerald green laser plane during symbolic state exploration.
- * 4. Completion State: Solid emerald timeline nodes & floating HUD tag [TIMED AUTOMATON PROVEN: ZERO DEADLOCKS].
+ * 3D Glowing Vector Filament connecting timeline nodes
+ * Uses standard Three.js cylinder mesh for 100% WebGL stability (zero line primitive crashes).
  */
-export default function TimedAutomaton3DVisuals() {
+function VectorFilament({
+  start,
+  end,
+  color,
+}: {
+  start: THREE.Vector3;
+  end: THREE.Vector3;
+  color: string;
+}) {
+  const { position, quaternion, length } = useMemo(() => {
+    const dir = new THREE.Vector3().subVectors(end, start);
+    const len = dir.length();
+    const pos = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    const quat = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      dir.clone().normalize()
+    );
+    return { position: pos, quaternion: quat, length: len };
+  }, [start, end]);
+
+  return (
+    <mesh position={position} quaternion={quaternion}>
+      <cylinderGeometry args={[0.008, 0.008, length, 8]} />
+      <meshBasicMaterial color={color} transparent opacity={0.85} />
+    </mesh>
+  );
+}
+
+/**
+ * Local Error Boundary to protect Canvas from black screen crashes
+ */
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+export class TimedAutomatonErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('[TimedAutomaton3DVisuals] WebGL Component Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return null;
+    }
+    return this.props.children;
+  }
+}
+
+/**
+ * Inner 3D Visualization Component
+ */
+function TimedAutomaton3DVisualsInner() {
   const [automatonState, setAutomatonState] = useState<TimedAutomatonState>(() =>
     timedAutomatonManager.getState()
   );
   const ghostGroupRef = useRef<THREE.Group>(null);
   const laserPlaneRef = useRef<THREE.Mesh>(null);
-  const laserBeamRef = useRef<THREE.Line>(null);
 
   useEffect(() => {
     return timedAutomatonManager.subscribe((state) => {
@@ -30,14 +87,12 @@ export default function TimedAutomaton3DVisuals() {
     });
   }, []);
 
-  const { status, selectedScript, verificationProgress, laserSweepX, ghostActive, ghostProgress } =
-    automatonState;
-
+  const { status, selectedScript } = automatonState;
   const isActive = status === 'VERIFYING' || status === 'VERIFIED';
   const isVerified = status === 'VERIFIED';
 
-  // Base spatial anchor for the timeline nodes (near astronaut console corridor)
-  const baseAnchor = useMemo(() => new THREE.Vector3(-1.0, 0.4, 0.4), []);
+  // Base spatial anchor for the timeline nodes (prominently in front of the main workstation)
+  const baseAnchor = useMemo(() => new THREE.Vector3(-0.4, 0.45, 0.35), []);
 
   const nodePositions = useMemo(() => {
     return selectedScript.timelineSteps.map((step) => {
@@ -49,20 +104,20 @@ export default function TimedAutomaton3DVisuals() {
     });
   }, [selectedScript, baseAnchor]);
 
-  // Points for 3D vector connector line
-  const timelineLineGeom = useMemo(() => {
-    return new THREE.BufferGeometry().setFromPoints(nodePositions);
-  }, [nodePositions]);
+  // Animation Loop with strict null-guards
+  useFrame((state) => {
+    const elapsed = state.clock.getElapsedTime();
 
-  // Fast-forward Ghost Animation
-  useFrame((_, delta) => {
-    if (ghostGroupRef.current && ghostActive) {
-      // Rapid fast-forward procedural drift
-      const t = automatonState.ghostProgress * Math.PI * 2;
-      ghostGroupRef.current.position.y = 0.85 + Math.sin(t * 3) * 0.12;
-      ghostGroupRef.current.position.x = -1.0 + Math.cos(t * 2) * 0.18;
-      ghostGroupRef.current.rotation.y = -Math.PI / 2 + Math.sin(t * 2.5) * 0.25;
-      ghostGroupRef.current.rotation.z = Math.sin(t * 2) * 0.12;
+    // Laser verification wave: animate single thin laser plane smoothly along Y-axis using Math.sin(elapsed * 2)
+    if (laserPlaneRef.current) {
+      laserPlaneRef.current.position.y = 1.0 + Math.sin(elapsed * 2.0) * 0.4;
+    }
+
+    // Holographic Ghost fast-forward simulation
+    if (ghostGroupRef.current && automatonState.ghostActive) {
+      ghostGroupRef.current.position.y = 0.55 + Math.sin(elapsed * 3.0) * 0.06;
+      ghostGroupRef.current.position.x = -0.7 + Math.cos(elapsed * 2.0) * 0.08;
+      ghostGroupRef.current.rotation.y = -Math.PI / 2 + Math.sin(elapsed * 2.5) * 0.15;
     }
   });
 
@@ -70,42 +125,48 @@ export default function TimedAutomaton3DVisuals() {
     return null;
   }
 
+  const filamentColor = isVerified ? '#00ff99' : '#00e5ff';
+
   return (
     <group id="timed-automaton-3d-system">
-      {/* ─── 1. 3D TEMPORAL TIMELINE VECTOR LINE ─────────────────────── */}
-      {/* @ts-ignore */}
-      <line geometry={timelineLineGeom}>
-        <lineBasicMaterial
-          color={isVerified ? '#00ff99' : '#00e5ff'}
-          linewidth={2}
-          transparent
-          opacity={0.7}
+      {/* ─── 1. 3D TEMPORAL TIMELINE VECTOR FILAMENTS ────────────────── */}
+      {nodePositions.length >= 2 && (
+        <VectorFilament
+          start={nodePositions[0]}
+          end={nodePositions[1]}
+          color={filamentColor}
         />
-      </line>
+      )}
+      {nodePositions.length >= 3 && (
+        <VectorFilament
+          start={nodePositions[1]}
+          end={nodePositions[2]}
+          color={filamentColor}
+        />
+      )}
 
-      {/* ─── 2. 3D TEMPORAL TIMELINE NODES ───────────────────────────── */}
+      {/* ─── 2. 3D TEMPORAL TIMELINE NODES (3 FIXED GLOWING STEP SPHERES) ─── */}
       {selectedScript.timelineSteps.map((step, idx) => {
         const pos = nodePositions[idx];
-        const isPassedByLaser =
-          isVerified || (status === 'VERIFYING' && laserSweepX >= pos.x - 0.2);
-        const nodeColor = isPassedByLaser ? '#00ff99' : '#00e5ff';
+        const nodeColor = isVerified ? '#00ff99' : '#00e5ff';
 
         return (
           <group key={step.time} position={pos}>
-            {/* Glowing Diamond / Octahedron Node Marker */}
+            {/* Glowing 3D Node Marker Sphere */}
             <mesh>
-              <octahedronGeometry args={[0.12]} />
+              <sphereGeometry args={[0.11, 16, 16]} />
               <meshStandardMaterial
                 color={nodeColor}
                 emissive={nodeColor}
-                emissiveIntensity={isPassedByLaser ? 1.8 : 0.8}
-                wireframe={false}
+                emissiveIntensity={isVerified ? 2.2 : 1.1}
+                roughness={0.2}
+                metalness={0.8}
               />
             </mesh>
 
             {/* Orbiting Node Wireframe Ring */}
             <mesh rotation={[Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[0.16, 0.19, 24]} />
+              <ringGeometry args={[0.15, 0.18, 24]} />
               <meshBasicMaterial
                 color={nodeColor}
                 transparent
@@ -114,19 +175,19 @@ export default function TimedAutomaton3DVisuals() {
               />
             </mesh>
 
-            {/* 3D Floating Billboard Label for Step */}
-            <Html position={[0, 0.28, 0]} center distanceFactor={10}>
+            {/* 3D Floating Billboard Step Label */}
+            <Html position={[0, 0.26, 0]} center distanceFactor={8}>
               <div
                 style={{
                   fontSize: '9.5px',
                   backgroundColor: 'rgba(2, 8, 16, 0.92)',
-                  borderColor: isPassedByLaser
+                  borderColor: isVerified
                     ? 'rgba(0, 255, 153, 0.7)'
                     : 'rgba(0, 229, 255, 0.5)',
-                  boxShadow: isPassedByLaser
+                  boxShadow: isVerified
                     ? '0 0 14px rgba(0, 255, 153, 0.4)'
                     : '0 0 10px rgba(0, 229, 255, 0.3)',
-                  color: isPassedByLaser ? '#00ff99' : '#00e5ff',
+                  color: isVerified ? '#00ff99' : '#00e5ff',
                 }}
                 className="px-2 py-0.5 rounded border font-mono font-bold uppercase tracking-wider whitespace-nowrap shadow-lg flex items-center gap-1.5 transition-all duration-300"
               >
@@ -137,7 +198,7 @@ export default function TimedAutomaton3DVisuals() {
                 <span>
                   {step.time}: {step.label}
                 </span>
-                {isPassedByLaser && (
+                {isVerified && (
                   <span className="text-[7.5px] font-bold px-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40">
                     [OK]
                   </span>
@@ -148,46 +209,37 @@ export default function TimedAutomaton3DVisuals() {
         );
       })}
 
-      {/* ─── 3. VERIFICATION LASER SWEEP PLANE ───────────────────────── */}
+      {/* ─── 3. VERIFICATION LASER WAVE PLANE ───────────────────────── */}
       {status === 'VERIFYING' && (
-        <group position={[laserSweepX, 1.2, 0.2]}>
-          {/* Glowing Vertical Laser Sheet */}
-          <mesh ref={laserPlaneRef} rotation={[0, Math.PI / 2, 0]}>
-            <planeGeometry args={[3.2, 2.4]} />
-            <meshBasicMaterial
-              color="#00ff99"
-              transparent
-              opacity={0.35}
-              side={THREE.DoubleSide}
-              depthWrite={false}
-              blending={THREE.AdditiveBlending}
-            />
-          </mesh>
-
-          {/* High-Luminance Center Beam */}
-          <mesh rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.02, 0.02, 2.4, 16]} />
-            <meshBasicMaterial color="#ffffff" />
-          </mesh>
-
-          {/* Glowing Laser Light Source */}
-          <pointLight color="#00ff99" intensity={2.5} distance={5} />
-        </group>
+        <mesh
+          ref={laserPlaneRef}
+          position={[-0.4, 1.0, 0.35]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[2.4, 2.4]} />
+          <meshBasicMaterial
+            color="#00ff99"
+            transparent
+            opacity={0.35}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        </mesh>
       )}
 
-      {/* ─── 4. HOLOGRAPHIC GHOST SIMULATION MESH ────────────────────── */}
-      {ghostActive && (
-        <group ref={ghostGroupRef} position={[-1.0, 0.85, 0.4]}>
-          {/* Ghost Astronaut Torso */}
+      {/* ─── 4. HOLOGRAPHIC GHOST SIMULATION (TRANSLUCENT CYAN WIREFRAME OVERLAY) ─── */}
+      {automatonState.ghostActive && (
+        <group ref={ghostGroupRef} position={[-0.7, 0.55, 0.3]}>
+          {/* Ghost Torso */}
           <mesh position={[0, 0.45, 0]}>
             <capsuleGeometry args={[0.26, 0.48, 12, 16]} />
             <meshStandardMaterial
               color="#00e5ff"
               emissive="#00e5ff"
-              emissiveIntensity={1.4}
+              emissiveIntensity={1.2}
               wireframe
               transparent
-              opacity={0.55}
+              opacity={0.35}
             />
           </mesh>
 
@@ -195,38 +247,38 @@ export default function TimedAutomaton3DVisuals() {
           <mesh position={[0, 0.9, 0]}>
             <sphereGeometry args={[0.24, 16, 16]} />
             <meshStandardMaterial
-              color="#00f0ff"
-              emissive="#00f0ff"
-              emissiveIntensity={1.6}
+              color="#00e5ff"
+              emissive="#00e5ff"
+              emissiveIntensity={1.4}
               wireframe
               transparent
-              opacity={0.65}
+              opacity={0.35}
             />
           </mesh>
 
-          {/* Ghost Backpack / Life Support Pack */}
+          {/* Ghost Backpack */}
           <mesh position={[0, 0.45, -0.22]}>
             <boxGeometry args={[0.38, 0.52, 0.18]} />
             <meshStandardMaterial
               color="#00e5ff"
               emissive="#00e5ff"
-              emissiveIntensity={1.2}
+              emissiveIntensity={1.0}
               wireframe
               transparent
-              opacity={0.5}
+              opacity={0.35}
             />
           </mesh>
 
-          {/* Ghost Floating Arms */}
+          {/* Ghost Arms */}
           <mesh position={[-0.32, 0.45, 0.12]} rotation={[0.4, 0, 0.3]}>
             <capsuleGeometry args={[0.08, 0.4, 8, 8]} />
             <meshStandardMaterial
               color="#00e5ff"
               emissive="#00e5ff"
-              emissiveIntensity={1.2}
+              emissiveIntensity={1.0}
               wireframe
               transparent
-              opacity={0.45}
+              opacity={0.35}
             />
           </mesh>
           <mesh position={[0.32, 0.45, 0.12]} rotation={[0.4, 0, -0.3]}>
@@ -234,15 +286,15 @@ export default function TimedAutomaton3DVisuals() {
             <meshStandardMaterial
               color="#00e5ff"
               emissive="#00e5ff"
-              emissiveIntensity={1.2}
+              emissiveIntensity={1.0}
               wireframe
               transparent
-              opacity={0.45}
+              opacity={0.35}
             />
           </mesh>
 
-          {/* Holographic Pulse Aura Indicator */}
-          <Html position={[0, 1.25, 0]} center distanceFactor={10}>
+          {/* Floating Pre-Flight CTL Sim Tag */}
+          <Html position={[0, 1.25, 0]} center distanceFactor={8}>
             <div
               style={{
                 fontSize: '9px',
@@ -259,18 +311,18 @@ export default function TimedAutomaton3DVisuals() {
         </group>
       )}
 
-      {/* ─── 5. VERIFICATION COMPLETION STATE HUD TAG ───────────────── */}
+      {/* ─── 5. VERIFICATION COMPLETION FLOATING HUD TAG ─────────────── */}
       {isVerified && (
-        <group position={[-1.0, 2.1, 0.4]}>
-          <Html center distanceFactor={9}>
+        <group position={[-0.4, 1.85, 0.35]}>
+          <Html center distanceFactor={8}>
             <div
               style={{
-                backgroundColor: 'rgba(2, 20, 12, 0.94)',
+                backgroundColor: 'rgba(2, 20, 12, 0.95)',
                 borderColor: '#00ff99',
-                boxShadow: '0 12px 35px rgba(0, 0, 0, 0.9), 0 0 25px rgba(0, 255, 153, 0.45)',
+                boxShadow: '0 12px 35px rgba(0, 0, 0, 0.9), 0 0 25px rgba(0, 255, 153, 0.5)',
                 color: '#00ff99',
               }}
-              className="px-3 py-1.5 rounded-xl border font-mono font-bold text-[10.5px] uppercase tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-2 animate-in fade-in zoom-in-95"
+              className="px-3.5 py-1.5 rounded-xl border font-mono font-bold text-[11px] uppercase tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-2 animate-in fade-in zoom-in-95"
             >
               <span className="w-2 h-2 rounded-full bg-[#00ff99] animate-ping shrink-0" />
               <span>[TIMED AUTOMATON PROVEN: ZERO DEADLOCKS]</span>
@@ -279,5 +331,16 @@ export default function TimedAutomaton3DVisuals() {
         </group>
       )}
     </group>
+  );
+}
+
+/**
+ * Default Export Wrapped in Error Boundary for 100% Canvas Crash Immunity
+ */
+export default function TimedAutomaton3DVisuals() {
+  return (
+    <TimedAutomatonErrorBoundary>
+      <TimedAutomaton3DVisualsInner />
+    </TimedAutomatonErrorBoundary>
   );
 }

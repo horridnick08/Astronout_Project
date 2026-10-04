@@ -3,8 +3,8 @@
  *
  * UPPAAL CTL Symbolic Timed Automaton Deadlock Verification Manager:
  * - Manages pre-flight XML timed automata procedure scripts.
- * - Simulates symbolic state-space exploration & CTL verification.
- * - Drives 3D Holographic Ghost Sequence, temporal timeline nodes, and laser sweep in the 3D Viewport.
+ * - Non-blocking async simulation using setTimeout (300ms delay per log line, completing in < 1.5s).
+ * - Pure state manager with zero CPU-thrashing RAF loops.
  */
 
 export type TimedAutomatonStatus = 'IDLE' | 'VERIFYING' | 'VERIFIED';
@@ -26,11 +26,10 @@ export interface TimedAutomatonState {
   selectedScript: ProcedureScript;
   scripts: ProcedureScript[];
   verificationProgress: number; // 0.0 to 1.0
-  laserSweepX: number; // For 3D laser plane positioning
   ghostActive: boolean;
-  ghostProgress: number; // For ghost fast-forward motion
   terminalLogs: string[];
   deadlockStateCount: number;
+  isVerifying: boolean;
 }
 
 export const PROCEDURE_SCRIPTS: ProcedureScript[] = [
@@ -43,9 +42,9 @@ export const PROCEDURE_SCRIPTS: ProcedureScript[] = [
     clocksCount: 6,
     formula: 'A[] not deadlock',
     timelineSteps: [
-      { time: 'T+0.0s', label: 'System Init', offset: [-1.2, 0.4, 0.0] },
-      { time: 'T+1.2s', label: 'Valve Lock', offset: [-0.4, 0.8, -0.6] },
-      { time: 'T+2.5s', label: 'Sync', offset: [0.6, 1.3, -1.2] },
+      { time: 'T+0.0s', label: 'System Init', offset: [-0.6, 0.2, 0.3] },
+      { time: 'T+1.2s', label: 'Valve Lock', offset: [0.0, 0.6, 0.0] },
+      { time: 'T+2.5s', label: 'Sync', offset: [0.6, 1.0, -0.3] },
     ],
   },
   {
@@ -57,9 +56,9 @@ export const PROCEDURE_SCRIPTS: ProcedureScript[] = [
     clocksCount: 8,
     formula: 'A[] not deadlock',
     timelineSteps: [
-      { time: 'T+0.0s', label: 'Purge Chamber', offset: [-1.2, 0.4, 0.0] },
-      { time: 'T+1.4s', label: 'O2 Inject', offset: [-0.4, 0.8, -0.6] },
-      { time: 'T+2.8s', label: '101.3 kPa Lock', offset: [0.6, 1.3, -1.2] },
+      { time: 'T+0.0s', label: 'Purge Chamber', offset: [-0.6, 0.2, 0.3] },
+      { time: 'T+1.4s', label: 'O2 Inject', offset: [0.0, 0.6, 0.0] },
+      { time: 'T+2.8s', label: '101.3 kPa Lock', offset: [0.6, 1.0, -0.3] },
     ],
   },
   {
@@ -71,9 +70,9 @@ export const PROCEDURE_SCRIPTS: ProcedureScript[] = [
     clocksCount: 5,
     formula: 'A[] not deadlock',
     timelineSteps: [
-      { time: 'T+0.0s', label: 'Gimbal Arm', offset: [-1.2, 0.4, 0.0] },
-      { time: 'T+1.0s', label: 'Ignition Pulse', offset: [-0.4, 0.8, -0.6] },
-      { time: 'T+2.2s', label: 'Attitude Hold', offset: [0.6, 1.3, -1.2] },
+      { time: 'T+0.0s', label: 'Gimbal Arm', offset: [-0.6, 0.2, 0.3] },
+      { time: 'T+1.0s', label: 'Ignition Pulse', offset: [0.0, 0.6, 0.0] },
+      { time: 'T+2.2s', label: 'Attitude Hold', offset: [0.6, 1.0, -0.3] },
     ],
   },
 ];
@@ -82,9 +81,7 @@ class TimedAutomatonManagerClass {
   private status: TimedAutomatonStatus = 'IDLE';
   private selectedScriptId: string = 'docking';
   private verificationProgress: number = 0;
-  private laserSweepX: number = -1.5;
   private ghostActive: boolean = false;
-  private ghostProgress: number = 0;
   private terminalLogs: string[] = [
     '>_ UPPAAL CTL Symbolic Engine ready.',
     '>_ Select a procedure script and run model check.',
@@ -92,7 +89,7 @@ class TimedAutomatonManagerClass {
   private deadlockStateCount: number = 0;
 
   private listeners: Set<(state: TimedAutomatonState) => void> = new Set();
-  private animFrameId: number | null = null;
+  private timerIds: Array<ReturnType<typeof setTimeout>> = [];
 
   public subscribe(listener: (state: TimedAutomatonState) => void): () => void {
     this.listeners.add(listener);
@@ -102,7 +99,13 @@ class TimedAutomatonManagerClass {
 
   private notify() {
     const s = this.getState();
-    this.listeners.forEach((fn) => fn(s));
+    this.listeners.forEach((fn) => {
+      try {
+        fn(s);
+      } catch (err) {
+        console.error('[TimedAutomatonManager] Listener error:', err);
+      }
+    });
   }
 
   public getState(): TimedAutomatonState {
@@ -114,11 +117,10 @@ class TimedAutomatonManagerClass {
       selectedScript,
       scripts: PROCEDURE_SCRIPTS,
       verificationProgress: this.verificationProgress,
-      laserSweepX: this.laserSweepX,
       ghostActive: this.ghostActive,
-      ghostProgress: this.ghostProgress,
       terminalLogs: this.terminalLogs,
       deadlockStateCount: this.deadlockStateCount,
+      isVerifying: this.status === 'VERIFYING',
     };
   }
 
@@ -138,81 +140,75 @@ class TimedAutomatonManagerClass {
     this.notify();
   }
 
+  private clearTimers() {
+    this.timerIds.forEach((id) => clearTimeout(id));
+    this.timerIds = [];
+  }
+
   /**
-   * Action: Run UPPAAL CTL Symbolic Model Check
-   * 1. Appends live logs in real time
-   * 2. Sweeps 3D laser plane across spatial temporal timeline nodes
-   * 3. Activates holographic ghost motion simulation in 3D viewport
-   * 4. Concludes with [TIMED AUTOMATON PROVEN: ZERO DEADLOCKS]
+   * Action: Non-blocking async simulation using setTimeout (300ms delay per log line)
+   * Completes in < 1.5s total (900ms) with structured execution logs.
    */
+  public runModelCheck() {
+    this.runVerification();
+  }
+
   public runVerification() {
     if (this.status === 'VERIFYING') return;
 
+    this.clearTimers();
     const script = this.getState().selectedScript;
     this.status = 'VERIFYING';
-    this.verificationProgress = 0;
+    this.verificationProgress = 0.1;
     this.ghostActive = true;
-    this.ghostProgress = 0;
+
+    // Line 1: Immediate
     this.terminalLogs = [
-      `>_ [INIT] Parsing timed automaton XML: ${script.filename}`,
       `>_ Loading timed automaton model graph...`,
     ];
     this.notify();
 
-    // Log stages
-    setTimeout(() => {
-      this.terminalLogs.push(
-        `>_ Exploring symbolic state space (${script.statesCount.toLocaleString()} states parsed)...`
-      );
+    // Line 2: 300ms
+    const t1 = setTimeout(() => {
+      this.verificationProgress = 0.45;
+      this.terminalLogs = [
+        ...this.terminalLogs,
+        `>_ Exploring symbolic state space (${script.statesCount.toLocaleString()} states parsed)...`,
+      ];
+      this.notify();
+    }, 300);
+    this.timerIds.push(t1);
+
+    // Line 3: 600ms
+    const t2 = setTimeout(() => {
+      this.verificationProgress = 0.75;
+      this.terminalLogs = [
+        ...this.terminalLogs,
+        `>_ Verifying CTL Formula: AG (not deadlock)`,
+      ];
       this.notify();
     }, 600);
+    this.timerIds.push(t2);
 
-    setTimeout(() => {
-      this.terminalLogs.push(`>_ Verifying CTL Formula: AG (not deadlock)`);
+    // Line 4: 900ms - Property satisfied & Completion (<1.5s)
+    const t3 = setTimeout(() => {
+      this.verificationProgress = 1.0;
+      this.status = 'VERIFIED';
+      this.deadlockStateCount = 0;
+      this.terminalLogs = [
+        ...this.terminalLogs,
+        `>_ PROPERTY SATISFIED: Script is 100% deadlock-free.`,
+      ];
       this.notify();
-    }, 1300);
-
-    // Laser & Ghost Animation Loop (~2.6s total)
-    const startTime = performance.now();
-    const duration = 2600;
-
-    const animate = () => {
-      const elapsed = performance.now() - startTime;
-      const t = Math.min(1.0, elapsed / duration);
-      this.verificationProgress = t;
-      this.laserSweepX = -1.5 + t * 2.8; // Sweeps from -1.5m to +1.3m in scene space
-      this.ghostProgress = (t * 3.5) % 1.0; // Fast-forward procedural cycle
-
-      if (t < 1.0) {
-        this.notify();
-        this.animFrameId = requestAnimationFrame(animate);
-      } else {
-        // Complete Verification
-        this.status = 'VERIFIED';
-        this.verificationProgress = 1.0;
-        this.laserSweepX = 1.3;
-        this.deadlockStateCount = 0;
-        this.terminalLogs.push(
-          `>_ PROPERTY SATISFIED: Script is 100% deadlock-free.`,
-          `>_ [SUCCESS] 0 deadlocks found across ${script.statesCount.toLocaleString()} states.`
-        );
-        this.notify();
-      }
-    };
-
-    if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
-    this.animFrameId = requestAnimationFrame(animate);
+    }, 900);
+    this.timerIds.push(t3);
   }
 
   public resetVerification() {
-    if (this.animFrameId) {
-      cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = null;
-    }
+    this.clearTimers();
     this.status = 'IDLE';
     this.verificationProgress = 0;
     this.ghostActive = false;
-    this.ghostProgress = 0;
     this.notify();
   }
 }

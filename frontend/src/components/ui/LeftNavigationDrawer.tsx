@@ -2396,11 +2396,11 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
                             }`}
                           />
                           <span
-                            className={`text-[10.5px] font-bold tracking-wide truncate ${
+                            className={`text-[10px] font-bold tracking-wide truncate ${
                               isSelected ? 'text-white' : 'text-slate-200 group-hover:text-emerald-300'
                             }`}
                           >
-                            {script.name}
+                            {script.filename}
                           </span>
                         </div>
                         <span
@@ -2415,7 +2415,7 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
                       </div>
 
                       <span className="text-[9.5px] text-[#00e5ff] font-medium truncate">
-                        {script.description}
+                        {script.name} — {script.description}
                       </span>
 
                       <div className="flex items-center gap-2 text-[8.5px] text-slate-400 pt-0.5 border-t border-emerald-500/15">
@@ -2423,9 +2423,9 @@ export default function LeftNavigationDrawer({ isOpen, onToggle }: LeftNavigatio
                           {script.statesCount.toLocaleString()} STATES
                         </span>
                         <span className="text-slate-600">•</span>
-                        <span className="text-slate-400 truncate">{script.clockVariables.length} CLOCKS</span>
+                        <span className="text-slate-400 truncate">{script.clocksCount} CLOCKS</span>
                         <span className="text-slate-600">•</span>
-                        <span className="text-cyan-400 truncate font-mono">{script.safetyFormula}</span>
+                        <span className="text-cyan-400 truncate font-mono">{script.formula}</span>
                       </div>
                     </div>
                   );
